@@ -5,6 +5,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import khuong.com.authservice.entity.ERole;
+import khuong.com.authservice.entity.Role;
+import khuong.com.authservice.repository.RoleRepository;
+
 @Component
 public class DataInitializer implements CommandLineRunner {
 

@@ -18,6 +18,10 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import khuong.com.authservice.security.AuthEntryPointJwt;
+import khuong.com.authservice.security.AuthTokenFilter;
+import khuong.com.authservice.security.UserDetailsServiceImpl;
+
 import java.util.Arrays;
 
 @Configuration
