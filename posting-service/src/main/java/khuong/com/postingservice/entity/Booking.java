@@ -28,7 +28,7 @@ public class Booking {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_bai_dang_tuyen", nullable = false)
-    private RecuitmentPost recruitmentPost;
+    private RecruitmentPost recruitmentPost;
     
     // Thêm các trường cần thiết cho việc đặt lịch
     @Column(name = "thoi_gian_hen")

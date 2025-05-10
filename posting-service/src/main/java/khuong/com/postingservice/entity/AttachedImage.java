@@ -27,7 +27,7 @@ public class AttachedImage {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_bai_dang_tuyen", nullable = true)
-    private RecuitmentPost recruitmentPost; // Ảnh cho bài đăng tuyển
+    private RecruitmentPost recruitmentPost; // Ảnh cho bài đăng tuyển
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_yeu_cau", nullable = true)
