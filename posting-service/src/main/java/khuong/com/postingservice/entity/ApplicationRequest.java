@@ -39,7 +39,7 @@ public class ApplicationRequest {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_bai_dang_tuyen", nullable = false)
-    private RecruitmentPost recruitmentPost;
+    private RecuitmentPost recruitmentPost;
 
     @Column(name = "ma_nguoi_dung_ung_tuyen", nullable = false) // Thêm trường này để biết ai ứng tuyển
     private Long applicantUserId; // ID từ Account-Service
