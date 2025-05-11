@@ -1,6 +1,6 @@
 package khuong.com.postingservice.entity;
 
-import khuong.com.postingservice.enums.RecuitmentPostStatus;
+import khuong.com.postingservice.enums.RecruitmentPostStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,7 +18,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class RecuitmentPost {
+public class RecruitmentPost {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -62,7 +62,7 @@ public class RecuitmentPost {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "trang_thai", nullable = false, length = 20)
-    private RecuitmentPostStatus status;
+    private RecruitmentPostStatus status;
 
     @Column(name = "ma_nguoi_dung_dang_tai", nullable = false)
     private Long posterUserId; // ID từ Account-Service
