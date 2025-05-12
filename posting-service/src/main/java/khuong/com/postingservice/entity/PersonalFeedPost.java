@@ -31,6 +31,12 @@ public class PersonalFeedPost {
     @Lob
     @Column(name = "noi_dung", columnDefinition = "TEXT")
     private String content;
+    
+    @Column(name = "caption", length = 255)
+    private String caption;
+    
+    @Column(name = "tags", length = 255)
+    private String tags;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "quyen_rieng_tu", nullable = false, length = 20)

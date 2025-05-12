@@ -1,7 +1,6 @@
-
 package khuong.com.postingservice.entity;
 
-import khuong.com.postingservice.enums.ApplicationRequestStatus;
+import khuong.com.postingservice.enums.ApplicationStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,23 +26,29 @@ public class ApplicationRequest {
 
     @CreationTimestamp
     @Column(name = "thoi_diem_gui", updatable = false)
-    private LocalDateTime submittedAt;
+    private LocalDateTime appliedAt;
 
     @Lob
     @Column(name = "loi_nhan", columnDefinition = "TEXT")
     private String message;
 
+    @Column(name = "thong_tin_lien_lac", length = 255)
+    private String contactInfo;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "trang_thai", nullable = false, length = 20)
-    private ApplicationRequestStatus status;
+    private ApplicationStatus status;
+
+    @Column(name = "thoi_diem_xu_ly")
+    private LocalDateTime processedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_bai_dang_tuyen", nullable = false)
     private RecruitmentPost recruitmentPost;
 
-    @Column(name = "ma_nguoi_dung_ung_tuyen", nullable = false) // Thêm trường này để biết ai ứng tuyển
-    private Long applicantUserId; // ID từ Account-Service
+    @Column(name = "ma_nguoi_dung_ung_tuyen", nullable = false)
+    private Long applicantUserId;
 
     @OneToMany(mappedBy = "applicationRequest", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<AttachedImage> attachedImages; // Ảnh portfolio của người ứng tuyển cho yêu cầu này
+    private List<AttachedImage> attachedImages;
 }
