@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: auth_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  auth-service:
+    build:
+      context: .
+      args:
+        JWT_SECRET: rSp/kisYeCdda6X8j0HA6jYCcpevXe6LQe3wHTPTC7GP5bQ5gqN15cLkAhtVomGpmT08rSqoyiD1wRxFOGhg8A==
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: auth_db
+      JWT_SECRET: rSp/kisYeCdda6X8j0HA6jYCcpevXe6LQe3wHTPTC7GP5bQ5gqN15cLkAhtVomGpmT08rSqoyiD1wRxFOGhg8A==
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data: 
