@@ -36,7 +36,7 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=midterm-domain1
+      - POSTGRES_DB=auth_db
     ports:
       - "5434:5432"  
     healthcheck:
@@ -55,7 +55,7 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=midterm-domain2
+      - POSTGRES_DB=posting_db
     ports:
       - "5433:5432"
     healthcheck:
@@ -87,29 +87,26 @@ services:
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
 
-  domain-1:
+  auth-service:
     build:
-      context: ./domain-1
+      context: ./auth-service
       args:
         - JWT_SECRET=${JWT_SECRET}
         - JWT_EXPIRATION=${JWT_EXPIRATION}
-    container_name: domain-1
+    container_name: auth-service
     restart: unless-stopped
     expose:
       - "8081"
     ports:
       - "8081:8081"
-    env_file:
-      - .env
-      - ./domain-1/.env
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db1:5432/midterm-domain1
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db1:5432/auth_db
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
       - SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT=60000
       - SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=10
-      - JWT_SECRET=rSp/kisYeCdda6X8j0HA6jYCcpevXe6LQe3wHTPTC7GP5bQ5gqN15cLkAhtVomGpmT08rSqoyiD1wRxFOGhg8A==
-      - JWT_EXPIRATION=86400000
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION}
       - LOGGING_LEVEL_ROOT=DEBUG
       - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB=DEBUG
       - SERVER_SERVLET_CONTEXT_PATH=/auth
@@ -117,8 +114,8 @@ services:
       - MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=always
       - SPRING_RABBITMQ_HOST=rabbitmq
       - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=guest
-      - SPRING_RABBITMQ_PASSWORD=guest
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USERNAME}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
       - SERVER_FORWARD_HEADERS_STRATEGY=FRAMEWORK
       - SERVER_USE_FORWARD_HEADERS=true
     depends_on:
@@ -131,14 +128,13 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 120s  # Increased start period
+      start_period: 120s
     labels:
-    #   - "traefik.enable=true"
-    #   - "traefik.http.routers.domain-1.rule=PathPrefix(`/auth`)"
-    #   - "traefik.http.routers.domain-1.entrypoints=web"
-      - "traefik.http.services.domain-1.loadbalancer.server.port=8081"
-      - "traefik.http.services.domain-1.loadbalancer.passHostHeader=true"
-      # Thêm middleware CORS
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth-service.rule=PathPrefix(`/auth`)"
+      - "traefik.http.routers.auth-service.entrypoints=web"
+      - "traefik.http.services.auth-service.loadbalancer.server.port=8081"
+      - "traefik.http.services.auth-service.loadbalancer.passHostHeader=true"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
@@ -147,124 +143,53 @@ services:
     networks:
       - app-net
 
-  domain-2:
+  posting-service:
     build:
-      context: ./domain-2
+      context: ./posting-service
       args:
         - JWT_SECRET=${JWT_SECRET}
         - JWT_EXPIRATION=${JWT_EXPIRATION}
-    container_name: domain-2
+        - REDIS_HOST=redis
+    container_name: posting-service
     restart: unless-stopped
     expose:
       - "8082"
     ports:
       - "8082:8082"
-    env_file:
-      - .env
-      - ./domain-2/.env
     environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db2:5432/midterm-domain2
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=123456
-      - SERVER_SERVLET_CONTEXT_PATH=/domain2
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db2:5432/posting_db
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
+      - SERVER_SERVLET_CONTEXT_PATH=/posting
       - SERVER_FORWARD_HEADERS_STRATEGY=framework
-      - JWT_SECRET=rSp/kisYeCdda6X8j0HA6jYCcpevXe6LQe3wHTPTC7GP5bQ5gqN15cLkAhtVomGpmT08rSqoyiD1wRxFOGhg8A==
-      - JWT_EXPIRATION=86400000
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRATION=${JWT_EXPIRATION}
       - LOGGING_LEVEL_ROOT=DEBUG
       - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB=DEBUG
       - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics
       - MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=always
       - SPRING_RABBITMQ_HOST=rabbitmq
       - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=guest
-      - SPRING_RABBITMQ_PASSWORD=guest
+      - SPRING_RABBITMQ_USERNAME=${RABBITMQ_USERNAME}
+      - SPRING_RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - REDIS_HOST=redis
     depends_on:
       db2:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "10", "http://localhost:8082/domain2/actuator/health"]
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "10", "http://localhost:8082/posting/actuator/health"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 120s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.domain-2.rule=PathPrefix(`/domain2`)"
-      - "traefik.http.routers.domain-2.entrypoints=web"
-      - "traefik.http.services.domain-2.loadbalancer.server.port=8082"
-      - "traefik.http.routers.domain-2.middlewares=cors@docker"
-      # Thêm middleware CORS
-      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
-      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
-      - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
-      - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=100"
-      - "traefik.http.middlewares.cors.headers.addvaryheader=true"
-    networks:
-      - app-net
-
-  kitchen-domain:
-    build:
-      context: . 
-      dockerfile: kitchen-domain/Dockerfile
-      args:
-        - JWT_SECRET=${JWT_SECRET:-rSp/kisYeCdda6X8j0HA6jYCcpevXe6LQe3wHTPTC7GP5bQ5gqN15cLkAhtVomGpmT08rSqoyiD1wRxFOGhg8A==}
-        - JWT_EXPIRATION=${JWT_EXPIRATION:-86400000}
-    container_name: kitchen-domain
-    restart: unless-stopped
-    expose:
-      - "8083"
-    ports:
-      - "8083:8083"
-    env_file:
-      - .env
-      - ./kitchen-domain/.env 
-    environment:
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://db2:5432/midterm-domain2
-      - SPRING_DATASOURCE_USERNAME=postgres
-      - SPRING_DATASOURCE_PASSWORD=123456
-      - SERVER_PORT=8083
-      # - SERVER_SERVLET_CONTEXT_PATH=/kitchen
-      - SERVER_FORWARD_HEADERS_STRATEGY=framework
-      - JWT_SECRET=rSp/kisYeCdda6X8j0HA6jYCcpevXe6LQe3wHTPTC7GP5bQ5gqN15cLkAhtVomGpmT08rSqoyiD1wRxFOGhg8A==
-      - JWT_EXPIRATION=86400000
-      - LOGGING_LEVEL_ROOT=DEBUG
-      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB=DEBUG
-      - MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=health,info,metrics
-      - MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS=always
-      - SPRING_RABBITMQ_HOST=rabbitmq
-      - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=guest
-      - SPRING_RABBITMQ_PASSWORD=guest
-      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
-      - SPRING_JPA_SHOW_SQL=true
-      - MANAGEMENT_HEALTH_REDIS_ENABLED=false
-      - MANAGEMENT_HEALTH_REDIS_CLUSTERS_ENABLED=false
-      - SPRING_AUTOCONFIGURE_EXCLUDE=org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
-      - DB_HOST=db2
-      - DB_PORT=5432
-      - DB_NAME=midterm-domain2
-    depends_on:
-      db2:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-      domain-2:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "10", "http://localhost:8083/kitchen/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=app-net"
-      - "traefik.http.routers.kitchen-domain.rule=PathPrefix(`/kitchen`)"
-      - "traefik.http.routers.kitchen-domain.entrypoints=web"
-      - "traefik.http.services.kitchen-domain.loadbalancer.server.port=8083"
-      # Thêm middleware CORS
+      - "traefik.http.routers.posting-service.rule=PathPrefix(`/posting`)"
+      - "traefik.http.routers.posting-service.entrypoints=web"
+      - "traefik.http.services.posting-service.loadbalancer.server.port=8082"
+      - "traefik.http.routers.posting-service.middlewares=cors@docker"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
@@ -288,22 +213,20 @@ services:
     volumes:
       - redisdata:/data
 
-  smart-order-fe:
+  style-bridge-fe:
     build:
-      context: ./smart-order-fe
+      context: ./style-bridge-fe
       dockerfile: Dockerfile
-    container_name: smart-order-fe
+    container_name: style-bridge-fe
     restart: unless-stopped
     expose:
       - "80"
     ports:
       - "3000:80" 
     depends_on:
-      domain-1:
+      auth-service:
         condition: service_healthy
-      domain-2:
-        condition: service_healthy
-      kitchen-domain:
+      posting-service:
         condition: service_healthy
     environment:
       - API_URL=http://localhost
@@ -316,7 +239,6 @@ services:
       - "traefik.http.routers.frontend.priority=1" 
       - "traefik.http.routers.frontend.entrypoints=web"
       - "traefik.http.services.frontend.loadbalancer.server.port=80"
-      # Thêm middleware CORS
       - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
       - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
@@ -325,7 +247,8 @@ services:
     networks:
       - app-net
     extra_hosts:
-      - "domain-2:172.17.0.1" 
+      - "posting-service:172.17.0.1" 
+      - "auth-service:172.17.0.1" 
       - "traefik:172.17.0.1" 
 
 networks:
