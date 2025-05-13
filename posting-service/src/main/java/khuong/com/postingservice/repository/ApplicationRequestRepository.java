@@ -16,9 +16,13 @@ public interface ApplicationRequestRepository extends JpaRepository<ApplicationR
     
     Page<ApplicationRequest> findByRecruitmentPostId(Long postId, Pageable pageable);
     
-    List<ApplicationRequest> findByApplicantUserId(Long userId);
+    Page<ApplicationRequest> findByApplicantUserId(Long userId, Pageable pageable);
     
     Optional<ApplicationRequest> findByRecruitmentPostIdAndApplicantUserId(Long postId, Long userId);
+    
+    boolean existsByRecruitmentPostIdAndApplicantUserId(Long postId, Long userId);
+    
+    Optional<ApplicationRequest> findByIdAndApplicantUserId(Long id, Long userId);
     
     @Query("SELECT COUNT(a) FROM ApplicationRequest a WHERE a.recruitmentPost.id = :postId")
     Long countApplicationsByPostId(@Param("postId") Long postId);

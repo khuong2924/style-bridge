@@ -8,8 +8,10 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import java.security.Key;
+import lombok.extern.slf4j.Slf4j;
 
 @Component
+@Slf4j
 public class JwtUtil {
     
     @Value("${app.jwt.secret}")
@@ -29,8 +31,22 @@ public class JwtUtil {
     }
     
     public String extractUserId(String token) {
-        Claims claims = extractAllClaims(token);
-        return claims.get("id", String.class);
+        try {
+            Claims claims = extractAllClaims(token);
+            // First try to get the id from the dedicated claim
+            String userId = claims.get("id", String.class);
+            // If the "id" claim is not present, fall back to the subject claim
+            if (userId == null) {
+                userId = claims.getSubject();
+                log.debug("UserId from subject (username): {}", userId);
+            } else {
+                log.debug("UserId from id claim: {}", userId);
+            }
+            return userId;
+        } catch (Exception e) {
+            log.error("Error extracting user ID from token: {}", e.getMessage());
+            return null;
+        }
     }
     
     private Key getSigningKey() {

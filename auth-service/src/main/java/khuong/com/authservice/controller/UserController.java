@@ -5,10 +5,12 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import khuong.com.authservice.dto.UpdateUserDTO;
 import khuong.com.authservice.dto.UserDTO;
+import khuong.com.authservice.payload.response.MessageResponse;
 import khuong.com.authservice.repository.UserRepository;
 import khuong.com.authservice.security.UserDetailsImpl;
 import khuong.com.authservice.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -16,6 +18,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
@@ -41,6 +46,20 @@ public class UserController {
             @Valid @RequestBody UpdateUserDTO updateRequest) {
         UserDTO userResponse = userService.updateUserProfile(currentUser.getId(), updateRequest);
         return ResponseEntity.ok(userResponse);
+    }
+    
+    @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> updateUserAvatar(
+            @AuthenticationPrincipal UserDetailsImpl currentUser,
+            @RequestParam("avatar") MultipartFile avatar) {
+        try {
+            UserDTO userResponse = userService.updateUserAvatar(currentUser.getId(), avatar);
+            return ResponseEntity.ok(userResponse);
+        } catch (IOException e) {
+            return ResponseEntity
+                    .badRequest()
+                    .body(new MessageResponse("Error: Failed to upload avatar."));
+        }
     }
 
     @GetMapping("/me")

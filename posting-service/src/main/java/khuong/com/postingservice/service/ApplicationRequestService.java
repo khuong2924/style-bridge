@@ -1,9 +1,13 @@
 package khuong.com.postingservice.service;
 
+import khuong.com.postingservice.dto.ImageInfo;
 import khuong.com.postingservice.entity.ApplicationRequest;
+import khuong.com.postingservice.enums.ApplicationStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
@@ -17,17 +21,17 @@ public interface ApplicationRequestService {
     
     Optional<ApplicationRequest> getApplicationById(Long applicationId);
     
-    Page<ApplicationRequest> getApplicationsByPostId(Long postId, Pageable pageable);
+    Page<ApplicationRequest> getAllApplications(Pageable pageable);
     
-    List<ApplicationRequest> getApplicationsByUserId(Long userId);
+    Page<ApplicationRequest> getApplicationsByUser(Long userId, Pageable pageable);
     
-    Optional<ApplicationRequest> getApplicationByPostAndUser(Long postId, Long userId);
+    Page<ApplicationRequest> getApplicationsByPost(Long postId, Long userId, Pageable pageable);
     
-    Long countApplicationsByPostId(Long postId);
+    ApplicationRequest updateApplicationStatus(Long applicationId, ApplicationStatus status, Long userId);
     
-    Page<ApplicationRequest> getApplicationsForPosterUser(Long userId, Pageable pageable);
+    List<ImageInfo> addImagesToApplication(Long applicationId, List<MultipartFile> images, Long userId) throws IOException;
     
-    void approveApplication(Long applicationId, Long userId);
+    void deleteImageFromApplication(Long applicationId, Long imageId, Long userId);
     
-    void rejectApplication(Long applicationId, Long userId);
+    List<ImageInfo> getApplicationImages(Long applicationId);
 } 

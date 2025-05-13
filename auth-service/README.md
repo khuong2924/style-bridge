@@ -83,3 +83,74 @@ CREATE DATABASE auth_db;
 If you encounter JWT configuration issues, ensure that:
 - The `app.jwt.secret` property is correctly set in application.properties
 - The JWT_SECRET environment variable is set when running in Docker 
+
+## User Registration with Avatar Upload
+
+The auth-service now supports user avatar upload during registration. The avatar is uploaded to Cloudinary and the URL is stored in the user's profile.
+
+### Registration Endpoint
+
+```
+POST /auth/signup
+Content-Type: multipart/form-data
+```
+
+### Request Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| username | String | Yes | Unique username (3-20 characters) |
+| email | String | Yes | Valid email address (max 50 characters) |
+| password | String | Yes | Password (6-40 characters) |
+| fullName | String | No | User's full name |
+| phone | String | No | User's phone number |
+| address | String | No | User's address |
+| gender | String | No | User's gender |
+| roles | Set<String> | No | User roles (defaults to ROLE_CUSTOMER) |
+| avatar | File | No | User's profile image |
+
+### Response
+
+```json
+{
+  "message": "User registered successfully!"
+}
+```
+
+Note: The avatar will be uploaded to Cloudinary and the URL will be stored in the user's profile. 
+
+## Avatar Update
+
+Users can update their profile avatar after registration using a dedicated endpoint.
+
+### Avatar Update Endpoint
+
+```
+POST /users/avatar
+Content-Type: multipart/form-data
+Authorization: Bearer {jwt_token}
+```
+
+### Request Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| avatar | File | Yes | User's new profile image |
+
+### Response
+
+```json
+{
+  "id": 1,
+  "username": "username",
+  "email": "user@example.com",
+  "fullName": "User Name",
+  "phone": "1234567890",
+  "address": "User Address",
+  "gender": "Male",
+  "avatarUrl": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/abcdef.jpg",
+  "roles": ["ROLE_CUSTOMER"]
+}
+```
+
+Note: The avatar will be uploaded to Cloudinary and the URL will be stored in the user's profile. 

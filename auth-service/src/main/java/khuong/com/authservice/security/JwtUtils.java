@@ -29,6 +29,7 @@ public class JwtUtils {
 
         return Jwts.builder()
                 .setSubject(userPrincipal.getUsername())
+                .claim("id", userPrincipal.getId().toString())
                 .claim("roles", roles)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
@@ -50,6 +51,26 @@ public class JwtUtils {
     public String getUserNameFromJwtToken(String token) {
         return Jwts.parser().setSigningKey(jwtSecret)
                 .parseClaimsJws(token).getBody().getSubject();
+    }
+    
+    public String getUserIdFromJwtToken(String token) {
+        try {
+            Claims claims = Jwts.parser().setSigningKey(jwtSecret)
+                .parseClaimsJws(token).getBody();
+            
+            String userId = claims.get("id", String.class);
+            if (userId != null) {
+                logger.debug("Extracted user ID from token: {}", userId);
+                return userId;
+            }
+            
+            // Fall back to subject if id claim is not present
+            logger.debug("ID claim not found, falling back to subject");
+            return claims.getSubject();
+        } catch (Exception e) {
+            logger.error("Error extracting user ID from token: {}", e.getMessage());
+            return null;
+        }
     }
 
     public boolean validateJwtToken(String authToken) {

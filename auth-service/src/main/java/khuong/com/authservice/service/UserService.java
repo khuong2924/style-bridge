@@ -2,6 +2,7 @@ package khuong.com.authservice.service;
 
 
 
+import khuong.com.authservice.cloudinary.ImageUploadService;
 import khuong.com.authservice.dto.UpdateUserDTO;
 import khuong.com.authservice.dto.UserDTO;
 import khuong.com.authservice.entity.User;
@@ -11,7 +12,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.stream.Collectors;
 
 @Service
@@ -19,6 +22,9 @@ public class UserService {
 
     @Autowired
     private UserRepository userRepository;
+    
+    @Autowired
+    private ImageUploadService imageUploadService;
 
     public UserDTO getUserProfile(Long userId) {
         User user = userRepository.findById(userId)
@@ -46,6 +52,19 @@ public class UserService {
         user = userRepository.save(user);
         return mapToUserDTO(user);
     }
+    
+    public UserDTO updateUserAvatar(Long userId, MultipartFile avatar) throws IOException {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        
+        if (avatar != null && !avatar.isEmpty()) {
+            String avatarUrl = imageUploadService.uploadImage(avatar);
+            user.setAvatarUrl(avatarUrl);
+            user = userRepository.save(user);
+        }
+        
+        return mapToUserDTO(user);
+    }
 
     private UserDTO mapToUserDTO(User user) {
         UserDTO userDTO = new UserDTO();
@@ -56,6 +75,7 @@ public class UserService {
         userDTO.setPhone(user.getPhone());
         userDTO.setAddress(user.getAddress());
         userDTO.setGender(user.getGender());
+        userDTO.setAvatarUrl(user.getAvatarUrl());
         return userDTO;
     }
 
@@ -72,7 +92,7 @@ public class UserService {
             username = principal.toString();
         }
         User user = userRepository.findByUsername(username).orElseThrow(() -> new RuntimeException("User not found"));
-        return new UserDTO(
+        UserDTO userDTO = new UserDTO(
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
@@ -82,5 +102,7 @@ public class UserService {
                 user.getGender(),
                 user.getRoles().stream().map(role -> role.getRole().getName().toString()).collect(Collectors.toSet())
         );
+        userDTO.setAvatarUrl(user.getAvatarUrl());
+        return userDTO;
     }
 }

@@ -1,29 +1,41 @@
 package khuong.com.postingservice.controller;
 
+import khuong.com.postingservice.configs.cloudinary.ImageUploadService;
+import khuong.com.postingservice.dto.ImageInfo;
+import khuong.com.postingservice.entity.AttachedImage;
 import khuong.com.postingservice.entity.RecruitmentPost;
 import khuong.com.postingservice.enums.RecruitmentPostStatus;
 import khuong.com.postingservice.service.RecruitmentPostService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.validation.Valid;
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/posts")
 @RequiredArgsConstructor
+@Slf4j
 public class RecruitmentPostController {
 
     private final RecruitmentPostService recruitmentPostService;
+    private final ImageUploadService imageUploadService;
 
     @PostMapping
     public ResponseEntity<RecruitmentPost> createPost(
@@ -32,6 +44,143 @@ public class RecruitmentPostController {
         Long userId = Long.valueOf(authentication.getPrincipal().toString());
         RecruitmentPost createdPost = recruitmentPostService.createPost(post, userId);
         return new ResponseEntity<>(createdPost, HttpStatus.CREATED);
+    }
+    
+    @PostMapping(value = "/with-images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> createPostWithImages(
+            @RequestParam("title") String title,
+            @RequestParam("makeupType") String makeupType,
+            @RequestParam("startTime") String startTimeStr,
+            @RequestParam("expectedDuration") String expectedDuration,
+            @RequestParam("address") String address,
+            @RequestParam(value = "hiringType", required = false) String hiringType,
+            @RequestParam(value = "compensation", required = false) String compensation,
+            @RequestParam(value = "quantity", required = false) Integer quantity,
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam("deadline") String deadlineStr,
+            @RequestParam(value = "images", required = false) List<MultipartFile> images,
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            Authentication authentication) {
+        
+        try {
+            log.info("Creating post with title: {}, startTime: {}, deadline: {}", title, startTimeStr, deadlineStr);
+            log.info("Auth header present: {}", authHeader != null ? "Yes" : "No");
+            
+            if (authentication == null) {
+                log.error("Authentication object is null - user is not authenticated");
+                return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body("User not authenticated. Please provide a valid authentication token.");
+            }
+            
+            String principal = authentication.getPrincipal().toString();
+            log.info("Authentication principal: {}", principal);
+            
+            // Extract numeric ID from principal (which might be in format "user1")
+            Long userId;
+            try {
+                if (principal.startsWith("user")) {
+                    // Extract the numeric part from strings like "user1"
+                    String idPart = principal.substring(4); // Skip "user" prefix
+                    userId = Long.valueOf(idPart);
+                    log.info("Extracted user ID {} from username {}", userId, principal);
+                } else {
+                    // Try direct conversion if it doesn't match the pattern
+                    userId = Long.valueOf(principal);
+                }
+            } catch (NumberFormatException | IndexOutOfBoundsException e) {
+                log.error("Failed to extract user ID from principal: {}", principal, e);
+                return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body("Could not extract user ID from authentication principal: " + principal);
+            }
+            
+            log.info("User ID extracted from authentication: {}", userId);
+            
+            // Parse date strings to LocalDateTime
+            LocalDateTime startTime;
+            LocalDateTime deadline;
+            
+            try {
+                startTime = LocalDateTime.parse(startTimeStr);
+                deadline = LocalDateTime.parse(deadlineStr);
+            } catch (DateTimeParseException e) {
+                log.error("Error parsing date: {}", e.getMessage());
+                return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body("Invalid date format. Use ISO format (yyyy-MM-ddTHH:mm:ss)");
+            }
+            
+            // Create RecruitmentPost object
+            RecruitmentPost post = new RecruitmentPost();
+            post.setTitle(title);
+            post.setMakeupType(makeupType);
+            post.setStartTime(startTime);
+            post.setExpectedDuration(expectedDuration);
+            post.setAddress(address);
+            post.setHiringType(hiringType);
+            post.setCompensation(compensation);
+            post.setQuantity(quantity);
+            post.setDescription(description);
+            post.setDeadline(deadline);
+            
+            // Save post
+            RecruitmentPost createdPost = recruitmentPostService.createPost(post, userId);
+            log.info("Post created with ID: {}", createdPost.getId());
+            
+            // Upload images if provided
+            if (images != null && !images.isEmpty()) {
+                log.info("Uploading {} images", images.size());
+                try {
+                    List<ImageInfo> uploadedImages = recruitmentPostService.addImagesToPost(createdPost.getId(), images, userId);
+                    log.info("Successfully uploaded {} images", uploadedImages.size());
+                } catch (IOException e) {
+                    log.error("Error uploading images: {}", e.getMessage());
+                    // Continue with post creation even if image upload fails
+                }
+            } else {
+                log.info("No images provided");
+            }
+            
+            return new ResponseEntity<>(createdPost, HttpStatus.CREATED);
+        } catch (Exception e) {
+            log.error("Error creating post with images: {}", e.getMessage(), e);
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("An unexpected error occurred: " + e.getMessage());
+        }
+    }
+
+    @PostMapping(value = "/{postId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<List<ImageInfo>> uploadImages(
+            @PathVariable Long postId,
+            @RequestParam("images") List<MultipartFile> images,
+            Authentication authentication) {
+        Long userId = Long.valueOf(authentication.getPrincipal().toString());
+        
+        try {
+            List<ImageInfo> uploadedImages = recruitmentPostService.addImagesToPost(postId, images, userId);
+            return ResponseEntity.ok(uploadedImages);
+        } catch (IOException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @DeleteMapping("/{postId}/images/{imageId}")
+    public ResponseEntity<Void> deleteImage(
+            @PathVariable Long postId,
+            @PathVariable Long imageId,
+            Authentication authentication) {
+        Long userId = Long.valueOf(authentication.getPrincipal().toString());
+        recruitmentPostService.deleteImageFromPost(postId, imageId, userId);
+        return ResponseEntity.noContent().build();
+    }
+    
+    @GetMapping("/{postId}/images")
+    public ResponseEntity<List<ImageInfo>> getPostImages(
+            @PathVariable Long postId) {
+        List<ImageInfo> images = recruitmentPostService.getPostImages(postId);
+        return ResponseEntity.ok(images);
     }
 
     @PutMapping("/{postId}")

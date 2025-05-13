@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Set;
 
@@ -27,6 +28,8 @@ public class SignupRequest {
     private String phone;
     private String address;
     private String gender;
+    
+    private MultipartFile avatar;
 
     private Set<String> roles;
 }

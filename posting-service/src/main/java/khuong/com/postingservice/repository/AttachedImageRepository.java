@@ -1,24 +1,23 @@
 package khuong.com.postingservice.repository;
 
 import khuong.com.postingservice.entity.AttachedImage;
+import khuong.com.postingservice.entity.RecruitmentPost;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface AttachedImageRepository extends JpaRepository<AttachedImage, Long> {
     
-    List<AttachedImage> findByRecruitmentPostId(Long postId);
+    List<AttachedImage> findByRecruitmentPostOrderByOrderInAlbumAsc(RecruitmentPost recruitmentPost);
     
-    List<AttachedImage> findByPersonalFeedPostId(Long postId);
+    Optional<AttachedImage> findByIdAndRecruitmentPostId(Long id, Long recruitmentPostId);
     
-    @Query("SELECT a FROM AttachedImage a WHERE a.recruitmentPost.posterUserId = :userId")
-    List<AttachedImage> findImagesByPosterUserId(@Param("userId") Long userId);
+    void deleteByRecruitmentPostId(Long recruitmentPostId);
     
-    void deleteByRecruitmentPostId(Long postId);
+    List<AttachedImage> findByApplicationRequestIdOrderByOrderInAlbumAsc(Long applicationRequestId);
     
-    void deleteByPersonalFeedPostId(Long postId);
+    List<AttachedImage> findByPersonalFeedPostIdOrderByOrderInAlbumAsc(Long personalFeedPostId);
 } 

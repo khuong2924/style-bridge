@@ -1,7 +1,11 @@
 package khuong.com.postingservice.service.impl;
 
+import khuong.com.postingservice.configs.cloudinary.ImageUploadService;
+import khuong.com.postingservice.dto.ImageInfo;
+import khuong.com.postingservice.entity.AttachedImage;
 import khuong.com.postingservice.entity.RecruitmentPost;
 import khuong.com.postingservice.enums.RecruitmentPostStatus;
+import khuong.com.postingservice.repository.AttachedImageRepository;
 import khuong.com.postingservice.repository.RecruitmentPostRepository;
 import khuong.com.postingservice.service.RecruitmentPostService;
 import lombok.RequiredArgsConstructor;
@@ -15,10 +19,14 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +34,8 @@ import java.util.Optional;
 public class RecruitmentPostServiceImpl implements RecruitmentPostService {
 
     private final RecruitmentPostRepository recruitmentPostRepository;
+    private final AttachedImageRepository attachedImageRepository;
+    private final ImageUploadService imageUploadService;
 
     @Override
     @Transactional
@@ -34,6 +44,69 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
         post.setStatus(RecruitmentPostStatus.ACTIVE);
         post.setPostedAt(LocalDateTime.now());
         return recruitmentPostRepository.save(post);
+    }
+    
+    @Override
+    @Transactional
+    public List<ImageInfo> addImagesToPost(Long postId, List<MultipartFile> images, Long userId) throws IOException {
+        RecruitmentPost post = recruitmentPostRepository.findByIdAndPosterUserId(postId, userId)
+                .orElseThrow(() -> new AccessDeniedException("You don't have permission to add images to this post"));
+        
+        List<ImageInfo> uploadedImages = new ArrayList<>();
+        int maxOrder = getMaxOrderForPost(post);
+        
+        for (MultipartFile image : images) {
+            if (!image.isEmpty()) {
+                String imageUrl = imageUploadService.uploadImage(image);
+                
+                AttachedImage attachedImage = AttachedImage.builder()
+                        .storagePath(imageUrl)
+                        .orderInAlbum(++maxOrder)
+                        .recruitmentPost(post)
+                        .build();
+                
+                attachedImage = attachedImageRepository.save(attachedImage);
+                
+                uploadedImages.add(new ImageInfo(
+                        attachedImage.getId(),
+                        attachedImage.getStoragePath(),
+                        attachedImage.getOrderInAlbum()
+                ));
+            }
+        }
+        
+        return uploadedImages;
+    }
+    
+    @Override
+    @Transactional
+    public void deleteImageFromPost(Long postId, Long imageId, Long userId) {
+        RecruitmentPost post = recruitmentPostRepository.findByIdAndPosterUserId(postId, userId)
+                .orElseThrow(() -> new AccessDeniedException("You don't have permission to delete images from this post"));
+        
+        AttachedImage image = attachedImageRepository.findByIdAndRecruitmentPostId(imageId, postId)
+                .orElseThrow(() -> new IllegalArgumentException("Image not found in this post"));
+        
+        attachedImageRepository.delete(image);
+    }
+    
+    @Override
+    public List<ImageInfo> getPostImages(Long postId) {
+        RecruitmentPost post = recruitmentPostRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("Post not found"));
+        
+        return attachedImageRepository.findByRecruitmentPostOrderByOrderInAlbumAsc(post)
+                .stream()
+                .map(img -> new ImageInfo(img.getId(), img.getStoragePath(), img.getOrderInAlbum()))
+                .collect(Collectors.toList());
+    }
+    
+    private int getMaxOrderForPost(RecruitmentPost post) {
+        return attachedImageRepository.findByRecruitmentPostOrderByOrderInAlbumAsc(post)
+                .stream()
+                .mapToInt(AttachedImage::getOrderInAlbum)
+                .max()
+                .orElse(0);
     }
 
     @Override
@@ -65,6 +138,10 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
         RecruitmentPost post = recruitmentPostRepository.findByIdAndPosterUserId(postId, userId)
                 .orElseThrow(() -> new AccessDeniedException("You don't have permission to delete this post"));
         
+        // Delete all attached images first
+        attachedImageRepository.deleteByRecruitmentPostId(postId);
+        
+        // Then delete the post
         recruitmentPostRepository.delete(post);
     }
 

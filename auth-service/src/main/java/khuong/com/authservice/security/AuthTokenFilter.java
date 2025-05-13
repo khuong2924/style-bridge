@@ -1,6 +1,5 @@
 package khuong.com.authservice.security;
 
-
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,14 +40,18 @@ public class AuthTokenFilter extends OncePerRequestFilter {
         try {
             String jwt = parseJwt(request);
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
+                // Get the username for loading UserDetails
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
-
+                // Get the user ID for setting as the principal
+                String userId = jwtUtils.getUserIdFromJwtToken(jwt);
+                
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities());
+                        userId, null, userDetails.getAuthorities());
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                logger.debug("Set authentication with user ID: {}", userId);
             }
         } catch (Exception e) {
             logger.error("Cannot set user authentication: {}", e);

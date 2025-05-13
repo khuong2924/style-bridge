@@ -1,9 +1,13 @@
 package khuong.com.postingservice.service.impl;
 
+import khuong.com.postingservice.configs.cloudinary.ImageUploadService;
+import khuong.com.postingservice.dto.ImageInfo;
 import khuong.com.postingservice.entity.ApplicationRequest;
+import khuong.com.postingservice.entity.AttachedImage;
 import khuong.com.postingservice.entity.RecruitmentPost;
 import khuong.com.postingservice.enums.ApplicationStatus;
 import khuong.com.postingservice.repository.ApplicationRequestRepository;
+import khuong.com.postingservice.repository.AttachedImageRepository;
 import khuong.com.postingservice.repository.RecruitmentPostRepository;
 import khuong.com.postingservice.service.ApplicationRequestService;
 import lombok.RequiredArgsConstructor;
@@ -13,10 +17,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -25,38 +33,105 @@ public class ApplicationRequestServiceImpl implements ApplicationRequestService 
 
     private final ApplicationRequestRepository applicationRequestRepository;
     private final RecruitmentPostRepository recruitmentPostRepository;
+    private final AttachedImageRepository attachedImageRepository;
+    private final ImageUploadService imageUploadService;
 
     @Override
     @Transactional
     public ApplicationRequest createApplication(ApplicationRequest application, Long userId) {
-        // Check if user has already applied
-        Optional<ApplicationRequest> existingApplication = applicationRequestRepository
-                .findByRecruitmentPostIdAndApplicantUserId(application.getRecruitmentPost().getId(), userId);
-        
-        if (existingApplication.isPresent()) {
-            throw new IllegalStateException("You have already applied to this post");
-        }
-        
-        // Check if post exists
+        // Verify the post exists
         RecruitmentPost post = recruitmentPostRepository.findById(application.getRecruitmentPost().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Recruitment post not found"));
         
-        application.setRecruitmentPost(post);
+        // Check if user already applied
+        if (applicationRequestRepository.existsByRecruitmentPostIdAndApplicantUserId(
+                post.getId(), userId)) {
+            throw new IllegalStateException("You have already applied to this post");
+        }
+        
         application.setApplicantUserId(userId);
         application.setStatus(ApplicationStatus.PENDING);
         application.setAppliedAt(LocalDateTime.now());
         
         return applicationRequestRepository.save(application);
     }
+    
+    @Override
+    @Transactional
+    public List<ImageInfo> addImagesToApplication(Long applicationId, List<MultipartFile> images, Long userId) throws IOException {
+        ApplicationRequest application = applicationRequestRepository.findByIdAndApplicantUserId(applicationId, userId)
+                .orElseThrow(() -> new AccessDeniedException("You don't have permission to add images to this application"));
+        
+        List<ImageInfo> uploadedImages = new ArrayList<>();
+        int maxOrder = getMaxOrderForApplication(applicationId);
+        
+        for (MultipartFile image : images) {
+            if (!image.isEmpty()) {
+                String imageUrl = imageUploadService.uploadImage(image);
+                
+                AttachedImage attachedImage = AttachedImage.builder()
+                        .storagePath(imageUrl)
+                        .orderInAlbum(++maxOrder)
+                        .applicationRequest(application)
+                        .build();
+                
+                attachedImage = attachedImageRepository.save(attachedImage);
+                
+                uploadedImages.add(new ImageInfo(
+                        attachedImage.getId(),
+                        attachedImage.getStoragePath(),
+                        attachedImage.getOrderInAlbum()
+                ));
+            }
+        }
+        
+        return uploadedImages;
+    }
+    
+    @Override
+    @Transactional
+    public void deleteImageFromApplication(Long applicationId, Long imageId, Long userId) {
+        // Check if the application belongs to the user
+        ApplicationRequest application = applicationRequestRepository.findByIdAndApplicantUserId(applicationId, userId)
+                .orElseThrow(() -> new AccessDeniedException("You don't have permission to delete images from this application"));
+        
+        // Find the image
+        AttachedImage image = attachedImageRepository.findById(imageId)
+                .orElseThrow(() -> new IllegalArgumentException("Image not found"));
+        
+        // Check if the image belongs to this application
+        if (image.getApplicationRequest() == null || !image.getApplicationRequest().getId().equals(applicationId)) {
+            throw new IllegalArgumentException("Image does not belong to this application");
+        }
+        
+        attachedImageRepository.delete(image);
+    }
+    
+    @Override
+    public List<ImageInfo> getApplicationImages(Long applicationId) {
+        return attachedImageRepository.findByApplicationRequestIdOrderByOrderInAlbumAsc(applicationId)
+                .stream()
+                .map(img -> new ImageInfo(img.getId(), img.getStoragePath(), img.getOrderInAlbum()))
+                .collect(Collectors.toList());
+    }
+    
+    private int getMaxOrderForApplication(Long applicationId) {
+        return attachedImageRepository.findByApplicationRequestIdOrderByOrderInAlbumAsc(applicationId)
+                .stream()
+                .mapToInt(AttachedImage::getOrderInAlbum)
+                .max()
+                .orElse(0);
+    }
 
     @Override
     @Transactional
     public ApplicationRequest updateApplication(Long applicationId, ApplicationRequest updatedApplication, Long userId) {
-        ApplicationRequest existingApplication = applicationRequestRepository.findById(applicationId)
-                .orElseThrow(() -> new IllegalArgumentException("Application not found"));
+        ApplicationRequest existingApplication = applicationRequestRepository.findByIdAndApplicantUserId(applicationId, userId)
+                .orElseThrow(() -> new AccessDeniedException("You don't have permission to update this application"));
         
-        if (!existingApplication.getApplicantUserId().equals(userId)) {
-            throw new AccessDeniedException("You don't have permission to update this application");
+        // Only allow updates if the application is still pending
+        if (existingApplication.getStatus() != ApplicationStatus.PENDING) {
+            throw new IllegalStateException("Cannot update application that is not in PENDING state");
         }
         
         existingApplication.setMessage(updatedApplication.getMessage());
@@ -68,11 +143,12 @@ public class ApplicationRequestServiceImpl implements ApplicationRequestService 
     @Override
     @Transactional
     public void deleteApplication(Long applicationId, Long userId) {
-        ApplicationRequest application = applicationRequestRepository.findById(applicationId)
-                .orElseThrow(() -> new IllegalArgumentException("Application not found"));
+        ApplicationRequest application = applicationRequestRepository.findByIdAndApplicantUserId(applicationId, userId)
+                .orElseThrow(() -> new AccessDeniedException("You don't have permission to delete this application"));
         
-        if (!application.getApplicantUserId().equals(userId)) {
-            throw new AccessDeniedException("You don't have permission to delete this application");
+        // Only allow deletion if the application is still pending
+        if (application.getStatus() != ApplicationStatus.PENDING) {
+            throw new IllegalStateException("Cannot delete application that is not in PENDING state");
         }
         
         applicationRequestRepository.delete(application);
@@ -84,65 +160,45 @@ public class ApplicationRequestServiceImpl implements ApplicationRequestService 
     }
 
     @Override
-    public Page<ApplicationRequest> getApplicationsByPostId(Long postId, Pageable pageable) {
+    public Page<ApplicationRequest> getAllApplications(Pageable pageable) {
+        return applicationRequestRepository.findAll(pageable);
+    }
+
+    @Override
+    public Page<ApplicationRequest> getApplicationsByUser(Long userId, Pageable pageable) {
+        return applicationRequestRepository.findByApplicantUserId(userId, pageable);
+    }
+
+    @Override
+    public Page<ApplicationRequest> getApplicationsByPost(Long postId, Long userId, Pageable pageable) {
+        // Check if the user is the poster of the recruitment post
+        RecruitmentPost post = recruitmentPostRepository.findById(postId)
+                .orElseThrow(() -> new IllegalArgumentException("Recruitment post not found"));
+        
+        if (!post.getPosterUserId().equals(userId)) {
+            throw new AccessDeniedException("You don't have permission to view applications for this post");
+        }
+        
         return applicationRequestRepository.findByRecruitmentPostId(postId, pageable);
     }
 
     @Override
-    public List<ApplicationRequest> getApplicationsByUserId(Long userId) {
-        return applicationRequestRepository.findByApplicantUserId(userId);
-    }
-
-    @Override
-    public Optional<ApplicationRequest> getApplicationByPostAndUser(Long postId, Long userId) {
-        return applicationRequestRepository.findByRecruitmentPostIdAndApplicantUserId(postId, userId);
-    }
-
-    @Override
-    public Long countApplicationsByPostId(Long postId) {
-        return applicationRequestRepository.countApplicationsByPostId(postId);
-    }
-
-    @Override
-    public Page<ApplicationRequest> getApplicationsForPosterUser(Long userId, Pageable pageable) {
-        return applicationRequestRepository.findApplicationsForPosterUser(userId, pageable);
-    }
-
-    @Override
     @Transactional
-    public void approveApplication(Long applicationId, Long userId) {
+    public ApplicationRequest updateApplicationStatus(Long applicationId, ApplicationStatus status, Long userId) {
+        // Get the application
         ApplicationRequest application = applicationRequestRepository.findById(applicationId)
                 .orElseThrow(() -> new IllegalArgumentException("Application not found"));
         
-        // Check if the current user is the post owner
+        // Check if the user is the poster of the recruitment post
         RecruitmentPost post = application.getRecruitmentPost();
         if (!post.getPosterUserId().equals(userId)) {
-            throw new AccessDeniedException("You don't have permission to approve this application");
+            throw new AccessDeniedException("You don't have permission to update this application status");
         }
         
-        application.setStatus(ApplicationStatus.APPROVED);
+        // Update the status
+        application.setStatus(status);
         application.setProcessedAt(LocalDateTime.now());
-        applicationRequestRepository.save(application);
         
-        log.info("Application {} has been approved by user {}", applicationId, userId);
-    }
-
-    @Override
-    @Transactional
-    public void rejectApplication(Long applicationId, Long userId) {
-        ApplicationRequest application = applicationRequestRepository.findById(applicationId)
-                .orElseThrow(() -> new IllegalArgumentException("Application not found"));
-        
-        // Check if the current user is the post owner
-        RecruitmentPost post = application.getRecruitmentPost();
-        if (!post.getPosterUserId().equals(userId)) {
-            throw new AccessDeniedException("You don't have permission to reject this application");
-        }
-        
-        application.setStatus(ApplicationStatus.REJECTED);
-        application.setProcessedAt(LocalDateTime.now());
-        applicationRequestRepository.save(application);
-        
-        log.info("Application {} has been rejected by user {}", applicationId, userId);
+        return applicationRequestRepository.save(application);
     }
 } 

@@ -62,6 +62,54 @@ Tạo một bài đăng tuyển dụng mới.
 }
 ```
 
+### Create Recruitment Post with Images
+Tạo một bài đăng tuyển dụng mới kèm theo hình ảnh được tải lên Cloudinary.
+
+- **URL**: `/posts/with-images`
+- **Method**: `POST`
+- **Content-Type**: `multipart/form-data`
+- **Auth required**: Yes
+
+**Request Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| title | String | Yes | Tiêu đề bài đăng |
+| makeupType | String | Yes | Loại trang điểm |
+| startTime | String | Yes | Thời gian bắt đầu (ISO format: yyyy-MM-ddTHH:mm:ss) |
+| expectedDuration | String | Yes | Thời lượng dự kiến |
+| address | String | Yes | Địa chỉ |
+| hiringType | String | No | Hình thức thuê |
+| compensation | String | No | Thù lao |
+| quantity | Integer | No | Số lượng tuyển |
+| description | String | No | Mô tả thêm |
+| deadline | String | Yes | Thời hạn bài đăng (ISO format: yyyy-MM-ddTHH:mm:ss) |
+| images | File[] | No | Hình ảnh đính kèm (nhiều file) |
+
+**Success Response**:
+- **Code**: 201 CREATED
+- **Content**:
+```json
+{
+  "id": 1,
+  "postedAt": "2023-06-15T10:30:00",
+  "title": "Cần tìm nghệ sĩ trang điểm cho đám cưới",
+  "makeupType": "Trang điểm cô dâu",
+  "startTime": "2023-07-15T09:00:00",
+  "expectedDuration": "3 giờ",
+  "address": "12 Nguyễn Huệ, Quận 1, TP.HCM",
+  "hiringType": "Trọn gói",
+  "compensation": "1,500,000 VND",
+  "quantity": 1,
+  "description": "Cần tìm nghệ sĩ trang điểm có kinh nghiệm làm việc với cô dâu, phong cách tự nhiên.",
+  "deadline": "2023-07-01T23:59:59",
+  "status": "ACTIVE",
+  "posterUserId": 123
+}
+```
+
+**Note**: Hình ảnh sẽ được tự động tải lên Cloudinary và lưu trữ URL trong cơ sở dữ liệu. Để lấy danh sách hình ảnh của bài đăng, sử dụng endpoint `/posts/{postId}/images`.
+
 ### Update Recruitment Post
 Cập nhật một bài đăng tuyển dụng.
 
@@ -342,6 +390,24 @@ curl -X POST http://localhost:8082/posting/api/posts \
   }
 ```
 
+### Tạo bài đăng tuyển dụng với hình ảnh
+```bash
+curl -X POST http://localhost:8082/posting/api/posts/with-images \
+  -H "Authorization: Bearer {jwt_token}" \
+  -F "title=Cần tìm nghệ sĩ trang điểm cho đám cưới" \
+  -F "makeupType=Trang điểm cô dâu" \
+  -F "startTime=2023-07-15T09:00:00" \
+  -F "expectedDuration=3 giờ" \
+  -F "address=12 Nguyễn Huệ, Quận 1, TP.HCM" \
+  -F "hiringType=Trọn gói" \
+  -F "compensation=1,500,000 VND" \
+  -F "quantity=1" \
+  -F "description=Cần tìm nghệ sĩ trang điểm có kinh nghiệm làm việc với cô dâu, phong cách tự nhiên." \
+  -F "deadline=2023-07-01T23:59:59" \
+  -F "images=@/path/to/image1.jpg" \
+  -F "images=@/path/to/image2.jpg"
+```
+
 ### Tìm kiếm bài đăng
 ```bash
 curl -X GET "http://localhost:8082/posting/api/posts/search?makeupType=Trang%20điểm%20cô%20dâu&status=ACTIVE&page=0&size=10" \
@@ -372,4 +438,230 @@ curl -X POST http://localhost:8082/posting/api/bookings \
     "location": "Cafe ABC, 123 Nguyễn Du, Quận 1, TP.HCM",
     "notes": "Vui lòng mang theo portfolio của bạn."
   }'
-``` 
+```
+
+## Image Upload Endpoints
+
+### Upload Images to Recruitment Post
+
+```
+POST /api/posts/{postId}/images
+Content-Type: multipart/form-data
+Authorization: Bearer {jwt_token}
+```
+
+**Request Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| images | File[] | Yes | Images to upload (multiple files) |
+
+**Response:**
+
+```json
+[
+  {
+    "id": 1,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/abcdef.jpg",
+    "orderInAlbum": 1
+  },
+  {
+    "id": 2,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/ghijkl.jpg",
+    "orderInAlbum": 2
+  }
+]
+```
+
+### Get Recruitment Post Images
+
+```
+GET /api/posts/{postId}/images
+Authorization: Bearer {jwt_token}
+```
+
+**Response:**
+
+```json
+[
+  {
+    "id": 1,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/abcdef.jpg",
+    "orderInAlbum": 1
+  },
+  {
+    "id": 2,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/ghijkl.jpg",
+    "orderInAlbum": 2
+  }
+]
+```
+
+### Delete Image from Recruitment Post
+
+```
+DELETE /api/posts/{postId}/images/{imageId}
+Authorization: Bearer {jwt_token}
+```
+
+**Response:** 204 No Content
+
+### Upload Images to Application Request
+
+```
+POST /api/applications/{applicationId}/images
+Content-Type: multipart/form-data
+Authorization: Bearer {jwt_token}
+```
+
+**Request Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| images | File[] | Yes | Images to upload (multiple files) |
+
+**Response:**
+
+```json
+[
+  {
+    "id": 1,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/abcdef.jpg",
+    "orderInAlbum": 1
+  },
+  {
+    "id": 2,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/ghijkl.jpg",
+    "orderInAlbum": 2
+  }
+]
+```
+
+### Get Application Request Images
+
+```
+GET /api/applications/{applicationId}/images
+Authorization: Bearer {jwt_token}
+```
+
+**Response:**
+
+```json
+[
+  {
+    "id": 1,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/abcdef.jpg",
+    "orderInAlbum": 1
+  },
+  {
+    "id": 2,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/ghijkl.jpg",
+    "orderInAlbum": 2
+  }
+]
+```
+
+### Delete Image from Application Request
+
+```
+DELETE /api/applications/{applicationId}/images/{imageId}
+Authorization: Bearer {jwt_token}
+```
+
+**Response:** 204 No Content
+
+### Create Personal Feed Post with Images
+
+```
+POST /api/feed
+Content-Type: multipart/form-data
+Authorization: Bearer {jwt_token}
+```
+
+**Request Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| content | String | Yes | Post content |
+| caption | String | No | Post caption |
+| tags | String | No | Post tags |
+| privacy | String | No | Privacy setting (PUBLIC, FRIENDS, PRIVATE) |
+| images | File[] | No | Images to upload (multiple files) |
+
+**Response:**
+
+```json
+{
+  "id": 1,
+  "postedAt": "2023-06-15T10:30:00",
+  "content": "This is my post content",
+  "caption": "My post caption",
+  "tags": "#makeup #beauty",
+  "privacy": "PUBLIC",
+  "posterUserId": 123
+}
+```
+
+### Upload Images to Personal Feed Post
+
+```
+POST /api/feed/{postId}/images
+Content-Type: multipart/form-data
+Authorization: Bearer {jwt_token}
+```
+
+**Request Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| images | File[] | Yes | Images to upload (multiple files) |
+
+**Response:**
+
+```json
+[
+  {
+    "id": 1,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/abcdef.jpg",
+    "orderInAlbum": 1
+  },
+  {
+    "id": 2,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/ghijkl.jpg",
+    "orderInAlbum": 2
+  }
+]
+```
+
+### Get Personal Feed Post Images
+
+```
+GET /api/feed/{postId}/images
+Authorization: Bearer {jwt_token}
+```
+
+**Response:**
+
+```json
+[
+  {
+    "id": 1,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/abcdef.jpg",
+    "orderInAlbum": 1
+  },
+  {
+    "id": 2,
+    "storagePath": "https://res.cloudinary.com/decz34g1a/image/upload/v1234567890/ghijkl.jpg",
+    "orderInAlbum": 2
+  }
+]
+```
+
+### Delete Image from Personal Feed Post
+
+```
+DELETE /api/feed/{postId}/images/{imageId}
+Authorization: Bearer {jwt_token}
+```
+
+**Response:** 204 No Content 

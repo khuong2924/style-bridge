@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface PersonalFeedPostRepository extends JpaRepository<PersonalFeedPost, Long> {
@@ -25,4 +26,6 @@ public interface PersonalFeedPostRepository extends JpaRepository<PersonalFeedPo
     
     @Query("SELECT DISTINCT p.tags FROM PersonalFeedPost p WHERE p.tags IS NOT NULL")
     List<String> findAllTags();
+
+    Optional<PersonalFeedPost> findByIdAndPosterUserId(Long id, Long userId);
 } 

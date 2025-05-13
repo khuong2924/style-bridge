@@ -76,6 +76,12 @@
             <version>42.6.0</version>
         </dependency>
 
+         <dependency>
+            <groupId>com.cloudinary</groupId>
+            <artifactId>cloudinary-http45</artifactId>
+            <version>1.38.0</version>
+        </dependency>
+
         <!-- Other dependencies without version tags -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

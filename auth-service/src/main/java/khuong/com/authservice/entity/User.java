@@ -49,6 +49,9 @@ public class User {
     @JsonIgnore
     private Set<UserRole> roles;
 
+    @Column(name = "avatar_url")
+    private String avatarUrl;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
