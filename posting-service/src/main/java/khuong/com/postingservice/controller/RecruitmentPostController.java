@@ -12,20 +12,23 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import java.text.SimpleDateFormat;
 
 import jakarta.validation.Valid;
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -50,21 +53,29 @@ public class RecruitmentPostController {
     public ResponseEntity<?> createPostWithImages(
             @RequestParam("title") String title,
             @RequestParam("makeupType") String makeupType,
-            @RequestParam("startTime") String startTimeStr,
             @RequestParam("expectedDuration") String expectedDuration,
             @RequestParam("address") String address,
             @RequestParam(value = "hiringType", required = false) String hiringType,
             @RequestParam(value = "compensation", required = false) String compensation,
             @RequestParam(value = "quantity", required = false) Integer quantity,
             @RequestParam(value = "description", required = false) String description,
-            @RequestParam("deadline") String deadlineStr,
+            @RequestParam(value = "startTime", required = false) String startTimeStr,
+            @RequestParam(value = "deadline", required = false) String deadlineStr,
             @RequestParam(value = "images", required = false) List<MultipartFile> images,
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             Authentication authentication) {
         
         try {
-            log.info("Creating post with title: {}, startTime: {}, deadline: {}", title, startTimeStr, deadlineStr);
+            log.info("Creating post with title: {}", title);
             log.info("Auth header present: {}", authHeader != null ? "Yes" : "No");
+            
+            // Kiểm tra xác thực chi tiết hơn
+            if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                log.error("Authorization header missing or invalid format");
+                return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body("Missing or invalid Authorization header. Please provide a valid Bearer token.");
+            }
             
             if (authentication == null) {
                 log.error("Authentication object is null - user is not authenticated");
@@ -97,32 +108,72 @@ public class RecruitmentPostController {
             
             log.info("User ID extracted from authentication: {}", userId);
             
-            // Parse date strings to LocalDateTime
-            LocalDateTime startTime;
-            LocalDateTime deadline;
-            
-            try {
-                startTime = LocalDateTime.parse(startTimeStr);
-                deadline = LocalDateTime.parse(deadlineStr);
-            } catch (DateTimeParseException e) {
-                log.error("Error parsing date: {}", e.getMessage());
-                return ResponseEntity
-                    .status(HttpStatus.BAD_REQUEST)
-                    .body("Invalid date format. Use ISO format (yyyy-MM-ddTHH:mm:ss)");
-            }
-            
             // Create RecruitmentPost object
             RecruitmentPost post = new RecruitmentPost();
             post.setTitle(title);
             post.setMakeupType(makeupType);
-            post.setStartTime(startTime);
             post.setExpectedDuration(expectedDuration);
             post.setAddress(address);
             post.setHiringType(hiringType);
             post.setCompensation(compensation);
             post.setQuantity(quantity);
             post.setDescription(description);
-            post.setDeadline(deadline);
+            
+            // Set LocalDateTime fields
+            LocalDateTime now = LocalDateTime.now();
+            post.setPostedAt(now);
+            
+            // Define formatters for different possible date formats
+            DateTimeFormatter[] formatters = {
+                DateTimeFormatter.ISO_LOCAL_DATE_TIME,  // ISO format: 2023-05-14T10:15:30
+                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"),
+                DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"),
+                DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm:ss")
+            };
+            
+            // Parse startTime if provided
+            if (startTimeStr != null && !startTimeStr.isEmpty()) {
+                boolean parsed = false;
+                for (DateTimeFormatter formatter : formatters) {
+                    try {
+                        LocalDateTime startTime = LocalDateTime.parse(startTimeStr, formatter);
+                        post.setStartTime(startTime);
+                        parsed = true;
+                        break;
+                    } catch (DateTimeParseException e) {
+                        // Try next formatter
+                    }
+                }
+                
+                if (!parsed) {
+                    log.error("Error parsing startTime: {}", startTimeStr);
+                    return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body("Invalid startTime format. Please use ISO-8601 format (yyyy-MM-ddTHH:mm:ss) or yyyy-MM-dd HH:mm:ss");
+                }
+            }
+            
+            // Parse deadline if provided
+            if (deadlineStr != null && !deadlineStr.isEmpty()) {
+                boolean parsed = false;
+                for (DateTimeFormatter formatter : formatters) {
+                    try {
+                        LocalDateTime deadline = LocalDateTime.parse(deadlineStr, formatter);
+                        post.setDeadline(deadline);
+                        parsed = true;
+                        break;
+                    } catch (DateTimeParseException e) {
+                        // Try next formatter
+                    }
+                }
+                
+                if (!parsed) {
+                    log.error("Error parsing deadline: {}", deadlineStr);
+                    return ResponseEntity
+                        .status(HttpStatus.BAD_REQUEST)
+                        .body("Invalid deadline format. Please use ISO-8601 format (yyyy-MM-ddTHH:mm:ss) or yyyy-MM-dd HH:mm:ss");
+                }
+            }
             
             // Save post
             RecruitmentPost createdPost = recruitmentPostService.createPost(post, userId);
@@ -142,7 +193,18 @@ public class RecruitmentPostController {
                 log.info("No images provided");
             }
             
-            return new ResponseEntity<>(createdPost, HttpStatus.CREATED);
+            // Fetch the post with attached images
+            RecruitmentPost postWithImages = recruitmentPostService.getPostById(createdPost.getId())
+                .orElseThrow(() -> new RuntimeException("Failed to retrieve the created post"));
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("id", postWithImages.getId());
+            response.put("title", postWithImages.getTitle());
+            response.put("status", postWithImages.getStatus());
+            response.put("address", postWithImages.getAddress());
+            response.put("message", "Post created successfully");
+            
+            return new ResponseEntity<>(response, HttpStatus.CREATED);
         } catch (Exception e) {
             log.error("Error creating post with images: {}", e.getMessage(), e);
             return ResponseEntity
@@ -213,7 +275,7 @@ public class RecruitmentPostController {
     public ResponseEntity<Page<RecruitmentPost>> getAllPosts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "postedAt") String sortBy,
+            @RequestParam(defaultValue = "id") String sortBy,
             @RequestParam(defaultValue = "DESC") String direction) {
         Sort.Direction sortDirection = Sort.Direction.fromString(direction);
         Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
@@ -247,13 +309,10 @@ public class RecruitmentPostController {
             @RequestParam(required = false) String title,
             @RequestParam(required = false) String makeupType,
             @RequestParam(required = false) RecruitmentPostStatus status,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size);
-        Page<RecruitmentPost> posts = recruitmentPostService.searchPosts(
-                title, makeupType, status, startDate, endDate, pageable);
+        Page<RecruitmentPost> posts = recruitmentPostService.searchPosts(title, makeupType, status, pageable);
         return ResponseEntity.ok(posts);
     }
 
@@ -274,4 +333,4 @@ public class RecruitmentPostController {
         recruitmentPostService.updatePostStatus(postId, status, userId);
         return ResponseEntity.noContent().build();
     }
-} 
+}

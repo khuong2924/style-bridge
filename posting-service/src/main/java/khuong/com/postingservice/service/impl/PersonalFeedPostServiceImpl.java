@@ -37,12 +37,14 @@ public class PersonalFeedPostServiceImpl implements PersonalFeedPostService {
     @Transactional
     public PersonalFeedPost createPost(PersonalFeedPost post, Long userId) {
         post.setPosterUserId(userId);
-        post.setPostedAt(LocalDateTime.now());
         
         // Set default privacy if not specified
         if (post.getPrivacy() == null) {
             post.setPrivacy(PrivacySetting.PUBLIC);
         }
+        
+        // Set posted time to now
+        post.setPostedAt(LocalDateTime.now());
         
         return personalFeedPostRepository.save(post);
     }
@@ -56,6 +58,7 @@ public class PersonalFeedPostServiceImpl implements PersonalFeedPostService {
         post.setContent(content);
         post.setCaption(caption);
         post.setTags(tags);
+        post.setPostedAt(LocalDateTime.now());
         
         // Set privacy
         if (privacy != null && !privacy.isEmpty()) {

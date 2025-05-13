@@ -6,7 +6,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import java.time.LocalDateTime; // Thêm trường thời gian đặt lịch
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "dat_lich")
@@ -27,9 +28,9 @@ public class Booking {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_bai_dang_tuyen", nullable = false)
     private RecruitmentPost recruitmentPost;
-    
-    @Column(name = "thoi_gian_hen")
-    private LocalDateTime bookingTime;
+
+    @Column(name = "ngay_gio_hen", nullable = false)
+    private LocalDateTime bookingDate;
 
     @Column(name = "dia_diem_hen", length = 255)
     private String location;
@@ -41,21 +42,9 @@ public class Booking {
     @Column(name = "trang_thai_dat_lich", length = 20)
     private BookingStatus status;
     
-    @Column(name = "thoi_gian_tao")
-    private LocalDateTime createdAt;
-    
-    @Column(name = "thoi_gian_xac_nhan")
-    private LocalDateTime confirmedAt;
-    
-    @Column(name = "thoi_gian_huy")
-    private LocalDateTime cancelledAt;
-    
     @Column(name = "nguoi_dung_huy")
     private Long cancelledBy;
     
     @Column(name = "ly_do_huy", length = 255)
     private String cancelReason;
-    
-    @Column(name = "thoi_gian_hoan_thanh")
-    private LocalDateTime completedAt;
 }

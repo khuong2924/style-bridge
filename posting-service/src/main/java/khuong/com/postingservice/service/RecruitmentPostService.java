@@ -8,7 +8,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,8 +31,6 @@ public interface RecruitmentPostService {
             String title,
             String makeupType,
             RecruitmentPostStatus status,
-            LocalDateTime startDate,
-            LocalDateTime endDate,
             Pageable pageable);
     
     List<RecruitmentPost> getRecentPosts(RecruitmentPostStatus status, int limit);

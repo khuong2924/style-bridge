@@ -24,8 +24,6 @@ public interface BookingService {
     
     List<Booking> getBookingsForPosterUser(Long userId);
     
-    List<Booking> getBookingsBetweenDates(LocalDateTime startDate, LocalDateTime endDate);
-    
     Page<Booking> getBookingsByPosterUserId(Long userId, Pageable pageable);
     
     void confirmBooking(Long bookingId, Long userId);
@@ -33,4 +31,6 @@ public interface BookingService {
     void cancelBooking(Long bookingId, Long userId, String reason);
     
     void completeBooking(Long bookingId, Long userId);
+    
+    List<Booking> getBookingsBetweenDates(LocalDateTime startDate, LocalDateTime endDate);
 } 

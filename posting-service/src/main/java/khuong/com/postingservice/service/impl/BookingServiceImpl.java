@@ -35,7 +35,6 @@ public class BookingServiceImpl implements BookingService {
         booking.setRecruitmentPost(post);
         booking.setClientUserId(userId);
         booking.setStatus(BookingStatus.PENDING);
-        booking.setCreatedAt(LocalDateTime.now());
         
         return bookingRepository.save(booking);
     }
@@ -56,7 +55,6 @@ public class BookingServiceImpl implements BookingService {
             throw new IllegalStateException("Cannot update a booking that is not in PENDING status");
         }
         
-        existingBooking.setBookingTime(updatedBooking.getBookingTime());
         existingBooking.setLocation(updatedBooking.getLocation());
         existingBooking.setNotes(updatedBooking.getNotes());
         
@@ -104,11 +102,6 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
-    public List<Booking> getBookingsBetweenDates(LocalDateTime startDate, LocalDateTime endDate) {
-        return bookingRepository.findBookingsBetweenDates(startDate, endDate);
-    }
-
-    @Override
     public Page<Booking> getBookingsByPosterUserId(Long userId, Pageable pageable) {
         return bookingRepository.findByRecruitmentPostPosterUserId(userId, pageable);
     }
@@ -125,7 +118,6 @@ public class BookingServiceImpl implements BookingService {
         }
         
         booking.setStatus(BookingStatus.CONFIRMED);
-        booking.setConfirmedAt(LocalDateTime.now());
         bookingRepository.save(booking);
         
         log.info("Booking {} has been confirmed by user {}", bookingId, userId);
@@ -145,7 +137,6 @@ public class BookingServiceImpl implements BookingService {
         
         booking.setStatus(BookingStatus.CANCELLED);
         booking.setCancelReason(reason);
-        booking.setCancelledAt(LocalDateTime.now());
         booking.setCancelledBy(userId);
         bookingRepository.save(booking);
         
@@ -169,9 +160,13 @@ public class BookingServiceImpl implements BookingService {
         }
         
         booking.setStatus(BookingStatus.COMPLETED);
-        booking.setCompletedAt(LocalDateTime.now());
         bookingRepository.save(booking);
         
         log.info("Booking {} has been marked as completed by user {}", bookingId, userId);
+    }
+    
+    @Override
+    public List<Booking> getBookingsBetweenDates(LocalDateTime startDate, LocalDateTime endDate) {
+        return bookingRepository.findBookingsBetweenDates(startDate, endDate);
     }
 } 

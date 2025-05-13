@@ -67,6 +67,8 @@ public class WebSecurityConfig {
                 auth
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers("/error").permitAll()
+                    // Cho phép tạm thời truy cập endpoint này không cần xác thực
+                    .requestMatchers("/api/posts/with-images").permitAll()
                     .requestMatchers("/api/posts/**").authenticated()
                     .anyRequest().permitAll()
             )

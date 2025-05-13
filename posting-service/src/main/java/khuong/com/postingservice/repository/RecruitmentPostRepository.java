@@ -9,7 +9,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -23,21 +22,18 @@ public interface RecruitmentPostRepository extends JpaRepository<RecruitmentPost
     @Query("SELECT r FROM RecruitmentPost r WHERE " +
            "(:title IS NULL OR LOWER(r.title) LIKE LOWER(CONCAT('%', :title, '%'))) AND " +
            "(:makeupType IS NULL OR LOWER(r.makeupType) LIKE LOWER(CONCAT('%', :makeupType, '%'))) AND " +
-           "(:status IS NULL OR r.status = :status) AND " +
-           "(:startDate IS NULL OR r.startTime >= :startDate) AND " +
-           "(:endDate IS NULL OR r.startTime <= :endDate)")
+           "(:status IS NULL OR r.status = :status)")
     Page<RecruitmentPost> searchPosts(
             @Param("title") String title,
             @Param("makeupType") String makeupType,
             @Param("status") RecruitmentPostStatus status,
-            @Param("startDate") LocalDateTime startDate,
-            @Param("endDate") LocalDateTime endDate,
             Pageable pageable);
     
-    List<RecruitmentPost> findByDeadlineBefore(LocalDateTime date);
-    
-    @Query("SELECT r FROM RecruitmentPost r WHERE r.status = :status ORDER BY r.postedAt DESC")
+    @Query("SELECT r FROM RecruitmentPost r WHERE r.status = :status")
     List<RecruitmentPost> findRecentPosts(@Param("status") RecruitmentPostStatus status, Pageable pageable);
     
     Optional<RecruitmentPost> findByIdAndPosterUserId(Long id, Long userId);
+    
+    @Query("SELECT r FROM RecruitmentPost r LEFT JOIN FETCH r.attachedImages WHERE r.id = :id")
+    Optional<RecruitmentPost> findByIdWithAttachedImages(@Param("id") Long id);
 } 

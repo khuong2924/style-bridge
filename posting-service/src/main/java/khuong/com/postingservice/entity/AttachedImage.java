@@ -1,5 +1,6 @@
 package khuong.com.postingservice.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,13 +28,16 @@ public class AttachedImage {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_bai_dang_tuyen", nullable = true)
+    @JsonBackReference("post-images")
     private RecruitmentPost recruitmentPost; // Ảnh cho bài đăng tuyển
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_yeu_cau", nullable = true)
+    @JsonBackReference("application-images")
     private ApplicationRequest applicationRequest; // Ảnh cho yêu cầu ứng tuyển
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_bai_dang_trang_ca_nhan", nullable = true)
+    @JsonBackReference("personal-post-images")
     private PersonalFeedPost personalFeedPost; // Ảnh cho bài đăng cá nhân
 }

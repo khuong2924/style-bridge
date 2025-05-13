@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -51,7 +50,6 @@ public class ApplicationRequestServiceImpl implements ApplicationRequestService 
         
         application.setApplicantUserId(userId);
         application.setStatus(ApplicationStatus.PENDING);
-        application.setAppliedAt(LocalDateTime.now());
         
         return applicationRequestRepository.save(application);
     }
@@ -197,7 +195,6 @@ public class ApplicationRequestServiceImpl implements ApplicationRequestService 
         
         // Update the status
         application.setStatus(status);
-        application.setProcessedAt(LocalDateTime.now());
         
         return applicationRequestRepository.save(application);
     }

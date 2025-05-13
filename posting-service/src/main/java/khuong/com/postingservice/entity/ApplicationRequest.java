@@ -6,9 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -24,10 +22,6 @@ public class ApplicationRequest {
     @Column(name = "ma_yeu_cau")
     private Long id;
 
-    @CreationTimestamp
-    @Column(name = "thoi_diem_gui", updatable = false)
-    private LocalDateTime appliedAt;
-
     @Lob
     @Column(name = "loi_nhan", columnDefinition = "TEXT")
     private String message;
@@ -38,9 +32,6 @@ public class ApplicationRequest {
     @Enumerated(EnumType.STRING)
     @Column(name = "trang_thai", nullable = false, length = 20)
     private ApplicationStatus status;
-
-    @Column(name = "thoi_diem_xu_ly")
-    private LocalDateTime processedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_bai_dang_tuyen", nullable = false)

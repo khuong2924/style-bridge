@@ -10,12 +10,10 @@ import khuong.com.postingservice.repository.RecruitmentPostRepository;
 import khuong.com.postingservice.service.RecruitmentPostService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,8 +39,17 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
     @Transactional
     public RecruitmentPost createPost(RecruitmentPost post, Long userId) {
         post.setPosterUserId(userId);
-        post.setStatus(RecruitmentPostStatus.ACTIVE);
-        post.setPostedAt(LocalDateTime.now());
+        
+        // Set default status if not provided
+        if (post.getStatus() == null) {
+            post.setStatus(RecruitmentPostStatus.ACTIVE);
+        }
+        
+        // Set postedAt if not provided
+        if (post.getPostedAt() == null) {
+            post.setPostedAt(LocalDateTime.now());
+        }
+        
         return recruitmentPostRepository.save(post);
     }
     
@@ -111,7 +118,6 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "recruitmentPosts", key = "#postId")
     public RecruitmentPost updatePost(Long postId, RecruitmentPost updatedPost, Long userId) {
         RecruitmentPost existingPost = recruitmentPostRepository.findByIdAndPosterUserId(postId, userId)
                 .orElseThrow(() -> new AccessDeniedException("You don't have permission to update this post"));
@@ -119,21 +125,32 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
         // Update fields
         existingPost.setTitle(updatedPost.getTitle());
         existingPost.setMakeupType(updatedPost.getMakeupType());
-        existingPost.setStartTime(updatedPost.getStartTime());
         existingPost.setExpectedDuration(updatedPost.getExpectedDuration());
         existingPost.setAddress(updatedPost.getAddress());
         existingPost.setHiringType(updatedPost.getHiringType());
         existingPost.setCompensation(updatedPost.getCompensation());
         existingPost.setQuantity(updatedPost.getQuantity());
         existingPost.setDescription(updatedPost.getDescription());
-        existingPost.setDeadline(updatedPost.getDeadline());
+        
+        // Update LocalDateTime fields if provided
+        if (updatedPost.getStartTime() != null) {
+            existingPost.setStartTime(updatedPost.getStartTime());
+        }
+        
+        if (updatedPost.getDeadline() != null) {
+            existingPost.setDeadline(updatedPost.getDeadline());
+        }
+        
+        // Status can be updated if provided
+        if (updatedPost.getStatus() != null) {
+            existingPost.setStatus(updatedPost.getStatus());
+        }
 
         return recruitmentPostRepository.save(existingPost);
     }
 
     @Override
     @Transactional
-    @CacheEvict(value = "recruitmentPosts", key = "#postId")
     public void deletePost(Long postId, Long userId) {
         RecruitmentPost post = recruitmentPostRepository.findByIdAndPosterUserId(postId, userId)
                 .orElseThrow(() -> new AccessDeniedException("You don't have permission to delete this post"));
@@ -146,9 +163,8 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
     }
 
     @Override
-    @Cacheable(value = "recruitmentPosts", key = "#postId")
     public Optional<RecruitmentPost> getPostById(Long postId) {
-        return recruitmentPostRepository.findById(postId);
+        return recruitmentPostRepository.findByIdWithAttachedImages(postId);
     }
 
     @Override
@@ -171,10 +187,8 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
             String title,
             String makeupType,
             RecruitmentPostStatus status,
-            LocalDateTime startDate,
-            LocalDateTime endDate,
             Pageable pageable) {
-        return recruitmentPostRepository.searchPosts(title, makeupType, status, startDate, endDate, pageable);
+        return recruitmentPostRepository.searchPosts(title, makeupType, status, pageable);
     }
 
     @Override
@@ -184,7 +198,6 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
 
     @Override
     @Transactional
-    @CacheEvict(value = "recruitmentPosts", key = "#postId")
     public void updatePostStatus(Long postId, RecruitmentPostStatus status, Long userId) {
         RecruitmentPost post = recruitmentPostRepository.findByIdAndPosterUserId(postId, userId)
                 .orElseThrow(() -> new AccessDeniedException("You don't have permission to update this post"));
@@ -194,18 +207,22 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
     }
 
     @Override
-    @Scheduled(cron = "0 0 * * * *") // Run every hour
     @Transactional
     public void checkAndUpdateExpiredPosts() {
         LocalDateTime now = LocalDateTime.now();
-        List<RecruitmentPost> expiredPosts = recruitmentPostRepository.findByDeadlineBefore(now);
         
+        // Find posts with deadline in the past and status still ACTIVE
+        List<RecruitmentPost> expiredPosts = recruitmentPostRepository.findAll().stream()
+            .filter(post -> post.getStatus() == RecruitmentPostStatus.ACTIVE 
+                    && post.getDeadline() != null 
+                    && post.getDeadline().isBefore(now))
+            .collect(Collectors.toList());
+        
+        // Update status to EXPIRED
         for (RecruitmentPost post : expiredPosts) {
-            if (post.getStatus() == RecruitmentPostStatus.ACTIVE) {
-                post.setStatus(RecruitmentPostStatus.EXPIRED);
-                recruitmentPostRepository.save(post);
-                log.info("Post with ID {} has been marked as expired", post.getId());
-            }
+            post.setStatus(RecruitmentPostStatus.EXPIRED);
+            recruitmentPostRepository.save(post);
+            log.info("Updated post ID {} to EXPIRED status", post.getId());
         }
     }
 } 

@@ -1,13 +1,12 @@
 package khuong.com.postingservice.entity;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import khuong.com.postingservice.enums.RecruitmentPostStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,10 +23,6 @@ public class RecruitmentPost {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "ma_bai_dang")
     private Long id;
-
-    @CreationTimestamp 
-    @Column(name = "thoi_gian_dang_tai", updatable = false)
-    private LocalDateTime postedAt;
 
     @Column(name = "tieu_de", nullable = false, length = 255)
     private String title;
@@ -57,8 +52,11 @@ public class RecruitmentPost {
     @Column(name = "mo_ta_them", columnDefinition = "TEXT")
     private String description;
 
-    @Column(name = "thoi_han_bai_dang")
+    @Column(name = "thoi_han")
     private LocalDateTime deadline;
+
+    @Column(name = "ngay_dang")
+    private LocalDateTime postedAt;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "trang_thai", nullable = false, length = 20)
@@ -71,6 +69,7 @@ public class RecruitmentPost {
     private List<ApplicationRequest> applicationRequests;
 
     @OneToMany(mappedBy = "recruitmentPost", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference("post-images")
     private List<AttachedImage> attachedImages;
 
     @OneToMany(mappedBy = "recruitmentPost", cascade = CascadeType.ALL, orphanRemoval = true)

@@ -6,7 +6,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,10 +23,6 @@ public class PersonalFeedPost {
     @Column(name = "ma_bai_dang")
     private Long id;
 
-    @CreationTimestamp
-    @Column(name = "thoi_gian_dang", updatable = false)
-    private LocalDateTime postedAt;
-
     @Lob
     @Column(name = "noi_dung", columnDefinition = "TEXT")
     private String content;
@@ -44,6 +39,9 @@ public class PersonalFeedPost {
 
     @Column(name = "ma_nguoi_dung_dang_tai", nullable = false)
     private Long posterUserId; // ID từ Account-Service
+
+    @Column(name = "thoi_gian_dang", nullable = false)
+    private LocalDateTime postedAt;
 
     @OneToMany(mappedBy = "personalFeedPost", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<AttachedImage> attachedImages;
