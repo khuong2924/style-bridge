@@ -30,6 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.security.access.AccessDeniedException;
 
 @RestController
 @RequestMapping("/api/posts")
@@ -183,10 +184,22 @@ public class RecruitmentPostController {
             if (images != null && !images.isEmpty()) {
                 log.info("Uploading {} images", images.size());
                 try {
-                    List<ImageInfo> uploadedImages = recruitmentPostService.addImagesToPost(createdPost.getId(), images, userId);
-                    log.info("Successfully uploaded {} images", uploadedImages.size());
+                    // Filter out empty files
+                    List<MultipartFile> validImages = images.stream()
+                        .filter(file -> file != null && !file.isEmpty())
+                        .collect(Collectors.toList());
+                    
+                    if (!validImages.isEmpty()) {
+                        List<ImageInfo> uploadedImages = recruitmentPostService.addImagesToPost(createdPost.getId(), validImages, userId);
+                        log.info("Successfully uploaded {} images", uploadedImages.size());
+                    } else {
+                        log.warn("No valid images found in the request");
+                    }
                 } catch (IOException e) {
-                    log.error("Error uploading images: {}", e.getMessage());
+                    log.error("Error uploading images: {}", e.getMessage(), e);
+                    // Continue with post creation even if image upload fails
+                } catch (Exception e) {
+                    log.error("Unexpected error during image upload: {}", e.getMessage(), e);
                     // Continue with post creation even if image upload fails
                 }
             } else {
@@ -214,20 +227,56 @@ public class RecruitmentPostController {
     }
 
     @PostMapping(value = "/{postId}/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<List<ImageInfo>> uploadImages(
+    public ResponseEntity<?> uploadImages(
             @PathVariable Long postId,
             @RequestParam("images") List<MultipartFile> images,
             Authentication authentication) {
         Long userId = Long.valueOf(authentication.getPrincipal().toString());
+        log.info("Uploading {} images to post ID: {}", images != null ? images.size() : 0, postId);
         
         try {
-            List<ImageInfo> uploadedImages = recruitmentPostService.addImagesToPost(postId, images, userId);
+            // Validate inputs
+            if (images == null || images.isEmpty()) {
+                log.warn("No images provided for upload to post ID: {}", postId);
+                return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "No images provided"));
+            }
+            
+            // Filter out empty files
+            List<MultipartFile> validImages = images.stream()
+                .filter(file -> file != null && !file.isEmpty())
+                .collect(Collectors.toList());
+            
+            if (validImages.isEmpty()) {
+                log.warn("No valid images found in the upload request for post ID: {}", postId);
+                return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "No valid images found in the upload request"));
+            }
+            
+            List<ImageInfo> uploadedImages = recruitmentPostService.addImagesToPost(postId, validImages, userId);
+            log.info("Successfully uploaded {} images to post ID: {}", uploadedImages.size(), postId);
+            
             return ResponseEntity.ok(uploadedImages);
+        } catch (AccessDeniedException e) {
+            log.error("Access denied: User {} does not have permission to add images to post {}", userId, postId);
+            return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(Map.of("error", "You don't have permission to add images to this post"));
         } catch (IOException e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            log.error("Error uploading images to post {}: {}", postId, e.getMessage(), e);
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "Failed to upload images: " + e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unexpected error uploading images to post {}: {}", postId, e.getMessage(), e);
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "An unexpected error occurred: " + e.getMessage()));
         }
     }
-    
+
     @DeleteMapping("/{postId}/images/{imageId}")
     public ResponseEntity<Void> deleteImage(
             @PathVariable Long postId,

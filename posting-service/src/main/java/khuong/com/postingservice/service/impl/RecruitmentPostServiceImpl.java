@@ -54,18 +54,28 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
     }
     
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public List<ImageInfo> addImagesToPost(Long postId, List<MultipartFile> images, Long userId) throws IOException {
+        // First, validate permissions before starting any operations
         RecruitmentPost post = recruitmentPostRepository.findByIdAndPosterUserId(postId, userId)
                 .orElseThrow(() -> new AccessDeniedException("You don't have permission to add images to this post"));
         
         List<ImageInfo> uploadedImages = new ArrayList<>();
         int maxOrder = getMaxOrderForPost(post);
         
+        // Process each image in a separate try-catch to allow partial success
         for (MultipartFile image : images) {
-            if (!image.isEmpty()) {
-                String imageUrl = imageUploadService.uploadImage(image);
+            try {
+                if (image == null || image.isEmpty()) {
+                    log.warn("Skipping empty image file");
+                    continue;
+                }
                 
+                // First upload the image to external storage (Cloudinary)
+                String imageUrl = imageUploadService.uploadImage(image);
+                log.info("Image uploaded successfully to: {}", imageUrl);
+                
+                // Then save the metadata to our database
                 AttachedImage attachedImage = AttachedImage.builder()
                         .storagePath(imageUrl)
                         .orderInAlbum(++maxOrder)
@@ -73,13 +83,22 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
                         .build();
                 
                 attachedImage = attachedImageRepository.save(attachedImage);
+                log.info("Image metadata saved with ID: {}", attachedImage.getId());
                 
                 uploadedImages.add(new ImageInfo(
                         attachedImage.getId(),
                         attachedImage.getStoragePath(),
                         attachedImage.getOrderInAlbum()
                 ));
+            } catch (Exception e) {
+                log.error("Error processing image: {}", e.getMessage(), e);
+                // We don't throw here to allow other images to be processed
             }
+        }
+        
+        // We need at least one successful image upload, otherwise throw an exception
+        if (images.size() > 0 && uploadedImages.isEmpty()) {
+            throw new IOException("Failed to upload any images. All uploads failed.");
         }
         
         return uploadedImages;
@@ -98,7 +117,9 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
     }
     
     @Override
+    @Transactional(readOnly = true)
     public List<ImageInfo> getPostImages(Long postId) {
+        log.debug("Getting images for post ID: {}", postId);
         RecruitmentPost post = recruitmentPostRepository.findById(postId)
                 .orElseThrow(() -> new IllegalArgumentException("Post not found"));
         
@@ -117,8 +138,9 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public RecruitmentPost updatePost(Long postId, RecruitmentPost updatedPost, Long userId) {
+        log.debug("Updating post ID: {} by user ID: {}", postId, userId);
         RecruitmentPost existingPost = recruitmentPostRepository.findByIdAndPosterUserId(postId, userId)
                 .orElseThrow(() -> new AccessDeniedException("You don't have permission to update this post"));
 
@@ -146,20 +168,32 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
             existingPost.setStatus(updatedPost.getStatus());
         }
 
-        return recruitmentPostRepository.save(existingPost);
+        try {
+            return recruitmentPostRepository.save(existingPost);
+        } catch (Exception e) {
+            log.error("Error updating post: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to update recruitment post: " + e.getMessage(), e);
+        }
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void deletePost(Long postId, Long userId) {
+        log.debug("Deleting post ID: {} by user ID: {}", postId, userId);
         RecruitmentPost post = recruitmentPostRepository.findByIdAndPosterUserId(postId, userId)
                 .orElseThrow(() -> new AccessDeniedException("You don't have permission to delete this post"));
         
-        // Delete all attached images first
-        attachedImageRepository.deleteByRecruitmentPostId(postId);
-        
-        // Then delete the post
-        recruitmentPostRepository.delete(post);
+        try {
+            // Delete all attached images first
+            attachedImageRepository.deleteByRecruitmentPostId(postId);
+            
+            // Then delete the post
+            recruitmentPostRepository.delete(post);
+            log.info("Successfully deleted post with ID: {}", postId);
+        } catch (Exception e) {
+            log.error("Error deleting post: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to delete recruitment post: " + e.getMessage(), e);
+        }
     }
 
     @Override
@@ -216,19 +250,27 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void updatePostStatus(Long postId, RecruitmentPostStatus status, Long userId) {
+        log.debug("Updating status for post ID: {} to {} by user ID: {}", postId, status, userId);
         RecruitmentPost post = recruitmentPostRepository.findByIdAndPosterUserId(postId, userId)
                 .orElseThrow(() -> new AccessDeniedException("You don't have permission to update this post"));
         
-        post.setStatus(status);
-        recruitmentPostRepository.save(post);
+        try {
+            post.setStatus(status);
+            recruitmentPostRepository.save(post);
+            log.info("Successfully updated post status to: {}", status);
+        } catch (Exception e) {
+            log.error("Error updating post status: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to update post status: " + e.getMessage(), e);
+        }
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void checkAndUpdateExpiredPosts() {
         LocalDateTime now = LocalDateTime.now();
+        log.debug("Checking for expired posts at: {}", now);
         
         // Find posts with deadline in the past and status still ACTIVE
         List<RecruitmentPost> expiredPosts = recruitmentPostRepository.findAll().stream()
@@ -239,9 +281,14 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
         
         // Update status to EXPIRED
         for (RecruitmentPost post : expiredPosts) {
-            post.setStatus(RecruitmentPostStatus.EXPIRED);
-            recruitmentPostRepository.save(post);
-            log.info("Updated post ID {} to EXPIRED status", post.getId());
+            try {
+                post.setStatus(RecruitmentPostStatus.EXPIRED);
+                recruitmentPostRepository.save(post);
+                log.info("Updated post ID {} to EXPIRED status", post.getId());
+            } catch (Exception e) {
+                log.error("Error updating post ID {} to EXPIRED status: {}", post.getId(), e.getMessage(), e);
+                // Continue processing other posts even if one fails
+            }
         }
     }
 } 

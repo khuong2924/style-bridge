@@ -55,18 +55,28 @@ public class ApplicationRequestServiceImpl implements ApplicationRequestService 
     }
     
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public List<ImageInfo> addImagesToApplication(Long applicationId, List<MultipartFile> images, Long userId) throws IOException {
+        // First, validate permissions before starting any operations
         ApplicationRequest application = applicationRequestRepository.findByIdAndApplicantUserId(applicationId, userId)
                 .orElseThrow(() -> new AccessDeniedException("You don't have permission to add images to this application"));
         
         List<ImageInfo> uploadedImages = new ArrayList<>();
         int maxOrder = getMaxOrderForApplication(applicationId);
         
+        // Process each image in a separate try-catch to allow partial success
         for (MultipartFile image : images) {
-            if (!image.isEmpty()) {
-                String imageUrl = imageUploadService.uploadImage(image);
+            try {
+                if (image == null || image.isEmpty()) {
+                    log.warn("Skipping empty image file");
+                    continue;
+                }
                 
+                // First upload the image to external storage (Cloudinary)
+                String imageUrl = imageUploadService.uploadImage(image);
+                log.info("Image uploaded successfully to: {}", imageUrl);
+                
+                // Then save the metadata to our database
                 AttachedImage attachedImage = AttachedImage.builder()
                         .storagePath(imageUrl)
                         .orderInAlbum(++maxOrder)
@@ -74,13 +84,22 @@ public class ApplicationRequestServiceImpl implements ApplicationRequestService 
                         .build();
                 
                 attachedImage = attachedImageRepository.save(attachedImage);
+                log.info("Image metadata saved with ID: {}", attachedImage.getId());
                 
                 uploadedImages.add(new ImageInfo(
                         attachedImage.getId(),
                         attachedImage.getStoragePath(),
                         attachedImage.getOrderInAlbum()
                 ));
+            } catch (Exception e) {
+                log.error("Error processing image: {}", e.getMessage(), e);
+                // We don't throw here to allow other images to be processed
             }
+        }
+        
+        // We need at least one successful image upload, otherwise throw an exception
+        if (images.size() > 0 && uploadedImages.isEmpty()) {
+            throw new IOException("Failed to upload any images. All uploads failed.");
         }
         
         return uploadedImages;

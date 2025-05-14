@@ -1,11 +1,12 @@
 package khuong.com.postingservice.controller;
 
-import khuong.com.postingservice.dto.ImageInfo;
 import khuong.com.postingservice.dto.ApplicationRequestDTO;
 import khuong.com.postingservice.dto.ApplicationRequestListDTO;
+import khuong.com.postingservice.dto.ImageInfo;
 import khuong.com.postingservice.entity.ApplicationRequest;
 import khuong.com.postingservice.entity.RecruitmentPost;
 import khuong.com.postingservice.enums.ApplicationStatus;
+import khuong.com.postingservice.repository.RecruitmentPostRepository;
 import khuong.com.postingservice.service.ApplicationRequestService;
 import khuong.com.postingservice.utils.TokenExtractor;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class ApplicationRequestController {
 
     private final ApplicationRequestService applicationRequestService;
     private final TokenExtractor tokenExtractor;
+    private final RecruitmentPostRepository recruitmentPostRepository;
 
     @PostMapping
     public ResponseEntity<ApplicationRequest> createApplication(
@@ -209,7 +211,7 @@ public class ApplicationRequestController {
         try {
             log.info("Creating application for post ID: {}", recruitmentPostId);
             
-            // Xác thực người dùng với xử lý lỗi rõ ràng
+            // Authentication check
             if (authentication == null) {
                 log.error("Authentication object is null");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
@@ -226,17 +228,50 @@ public class ApplicationRequestController {
                     .body(Map.of("error", "Invalid authentication token"));
             }
             
-            // Tạo đối tượng ApplicationRequest
+            // Validate recruitment post exists first
+            try {
+                if (!recruitmentPostRepository.existsById(recruitmentPostId)) {
+                    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("error", "Recruitment post not found with ID: " + recruitmentPostId));
+                }
+            } catch (Exception e) {
+                log.error("Error checking recruitment post existence: {}", e.getMessage(), e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to validate recruitment post: " + e.getMessage()));
+            }
+            
+            // Validate images before proceeding
+            List<MultipartFile> validImages = new ArrayList<>();
+            if (images != null && !images.isEmpty()) {
+                for (MultipartFile image : images) {
+                    if (image == null || image.isEmpty()) {
+                        continue;
+                    }
+                    
+                    String contentType = image.getContentType();
+                    if (contentType == null || !contentType.startsWith("image/")) {
+                        log.warn("Skipping non-image file: {}, type: {}", image.getOriginalFilename(), contentType);
+                        continue;
+                    }
+                    
+                    validImages.add(image);
+                }
+                log.info("Found {} valid images out of {} submitted", validImages.size(), images.size());
+            }
+            
+            // Create application first (without images)
             ApplicationRequest application = new ApplicationRequest();
             RecruitmentPost post = new RecruitmentPost();
             post.setId(recruitmentPostId);
             application.setRecruitmentPost(post);
             application.setMessage(message);
             application.setContactInfo(String.format("Kỹ năng: %s, Liên hệ: %s, Thời gian: %s", 
-                otherSkills, preferredContactMethod, availability));
+                otherSkills != null ? otherSkills : "N/A", 
+                preferredContactMethod != null ? preferredContactMethod : "N/A", 
+                availability != null ? availability : "N/A"));
             application.setStatus(ApplicationStatus.PENDING);
             
-            // Lưu yêu cầu ứng tuyển
+            // Save application (in a separate transaction)
             ApplicationRequest createdApplication;
             try {
                 createdApplication = applicationRequestService.createApplication(application, userId);
@@ -247,47 +282,37 @@ public class ApplicationRequestController {
                     .body(Map.of("error", "Failed to create application: " + e.getMessage()));
             }
             
-            // Upload images nếu có
+            // Now handle image uploads (in a separate transaction)
             List<ImageInfo> uploadedImages = new ArrayList<>();
-            if (images != null && !images.isEmpty()) {
-                log.info("Uploading {} portfolio images", images.size());
+            if (!validImages.isEmpty()) {
                 try {
-                    // Validate images before upload
-                    for (MultipartFile image : images) {
-                        if (image.isEmpty()) {
-                            continue;
-                        }
-                        
-                        // Check file type
-                        String contentType = image.getContentType();
-                        if (contentType == null || !contentType.startsWith("image/")) {
-                            log.warn("Skipping non-image file: {}, type: {}", image.getOriginalFilename(), contentType);
-                            continue;
-                        }
-                        
-                        log.debug("Processing image: {}, size: {}", image.getOriginalFilename(), image.getSize());
-                    }
-                    
+                    log.info("Attempting to upload {} portfolio images", validImages.size());
                     uploadedImages = applicationRequestService.addImagesToApplication(
-                        createdApplication.getId(), images, userId);
+                        createdApplication.getId(), validImages, userId);
                     log.info("Successfully uploaded {} portfolio images", uploadedImages.size());
-                } catch (IOException e) {
+                } catch (Exception e) {
                     log.error("Error uploading portfolio images: {}", e.getMessage(), e);
-                    // Tiếp tục với việc tạo application ngay cả khi upload ảnh thất bại
+                    // Continue with application creation even if image upload fails
+                    // The application was successfully created, so we return success with a warning
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("id", createdApplication.getId());
+                    response.put("recruitmentPostId", recruitmentPostId);
+                    response.put("message", "Application created successfully, but image upload failed");
+                    response.put("status", createdApplication.getStatus().toString());
+                    response.put("warning", "Failed to upload images: " + e.getMessage());
+                    
+                    return new ResponseEntity<>(response, HttpStatus.CREATED);
                 }
-            } else {
-                log.info("No portfolio images provided");
             }
             
-            // Tạo response với dữ liệu đã được chọn lọc
+            // Create successful response
             Map<String, Object> response = new HashMap<>();
             response.put("id", createdApplication.getId());
-            response.put("recruitmentPostId", createdApplication.getRecruitmentPost() != null ? 
-                createdApplication.getRecruitmentPost().getId() : null);
+            response.put("recruitmentPostId", recruitmentPostId);
             response.put("message", "Application created successfully");
             response.put("status", createdApplication.getStatus().toString());
             
-            // Thêm thông tin hình ảnh đã upload
+            // Add image information if any were uploaded
             if (!uploadedImages.isEmpty()) {
                 List<Map<String, Object>> imagesList = uploadedImages.stream()
                     .map(img -> {
@@ -302,6 +327,7 @@ public class ApplicationRequestController {
             }
             
             return new ResponseEntity<>(response, HttpStatus.CREATED);
+            
         } catch (Exception e) {
             log.error("Unexpected error creating application with images: {}", e.getMessage(), e);
             return ResponseEntity
