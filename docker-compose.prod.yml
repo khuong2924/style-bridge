@@ -1,40 +1,77 @@
 version: '3.8'
 
+networks:
+  app-net:
+    driver: bridge
+
+volumes:
+  pgdata1:
+  pgdata2:
+  rabbitmqdata:
+  redisdata:
+  letsencrypt: # Thêm volume cho chứng chỉ SSL của Traefik
+
 services:
   traefik:
-    image: traefik:v3.3
+    image: traefik:v3.3 # File mẫu dùng traefik:v2.10, bạn có thể cân nhắc phiên bản
     container_name: traefik
     restart: always
     ports:
-      - "80:80"
-      - "443:443"
+      - "80:80"     # public HTTP
+      - "443:443"   # public HTTPS
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/acme.json:/acme.json:rw
-      - ./traefik/traefik.toml:/etc/traefik/traefik.toml:ro
+      - ./letsencrypt:/letsencrypt # Sửa đường dẫn acme.json sang thư mục letsencrypt
+      # - ./traefik/traefik.toml:/etc/traefik/traefik.toml:ro # Bỏ file toml nếu dùng command-line args hoàn toàn
     command:
-      - "--api=false"
+      # --- Cấu hình cơ bản và API Dashboard (theo mẫu) ---
+      - "--api.dashboard=true"
+      - "--api.insecure=false" # Giữ an toàn, không insecure dashboard
       - "--providers.docker=true"
       - "--providers.docker.exposedByDefault=false"
+      # --- Entrypoints (theo mẫu) ---
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
-      - "--certificatesresolvers.myresolver.acme.email=your-email@domain.com"
-      - "--certificatesresolvers.myresolver.acme.storage=/acme.json"
+      # --- HTTP to HTTPS redirection (theo mẫu) ---
       - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
       - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      # --- ACME (Let's Encrypt) (theo mẫu, dùng httpChallenge) ---
+      - "--certificatesresolvers.myresolver.acme.httpchallenge=true"
+      - "--certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.myresolver.acme.email=truongkhuong666@gmail.com" # << THAY EMAIL CỦA BẠN VÀO ĐÂY
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+      # --- Docker provider (theo mẫu) ---
       - "--providers.docker.network=app-net"
-      - "--log.level=INFO"
+      # - "--providers.docker.defaultrule=Host(`truongvinhkhuong.io.vn`)" # Cân nhắc có cần default rule không
+      # --- Logging and Access Log (theo mẫu) ---
+      - "--log.level=INFO" # File mẫu là DEBUG, INFO có thể tốt hơn cho production
       - "--accesslog=true"
+      # --- Forwarded Headers (quan trọng khi có proxy phía trước, hoặc cho các ứng dụng cần biết schema gốc) ---
+      # Nếu Traefik là edge router, các dòng này có thể không cần hoặc cần tùy chỉnh
+      # - "--serverstransport.insecureskipverify=true" # Chỉ dùng nếu thực sự hiểu và cần thiết
+      # - "--entryPoints.websecure.forwardedHeaders.insecure=true" # Cẩn thận với insecure
+      # - "--entryPoints.web.forwardedHeaders.insecure=true" # Cẩn thận với insecure
     networks:
       - app-net
-    healthcheck:
+    labels: # Cấu hình dashboard Traefik (theo mẫu)
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`truongvinhkhuong.io.vn`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))" # << THAY DOMAIN NẾU CẦN
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=auth"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=myresolver"
+      - "traefik.http.middlewares.auth.basicauth.users=admin:$$apr1$$xyS4ESFe$$9PQfEFKmJtJmOJTYfFTYm0" # << THAY USER:PASSWORD (admin:admin)
+      # Cân nhắc thêm các security headers nếu cần
+      # - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
+      # - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
+      # - "traefik.http.middlewares.security-headers.headers.stsPreload=true"
+    healthcheck: # Giữ healthcheck của bạn
       test: ["CMD", "wget", "--no-verbose", "--spider", "--tries=1", "http://localhost:80/ping"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
-    deploy:
+    deploy: # Giữ deploy config của bạn
       resources:
         limits:
           memory: 256M
@@ -46,14 +83,14 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=auth_db
+      - POSTGRES_DB=auth_db # File mẫu là midterm-domain1, giữ tên DB của bạn
     expose:
       - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 30s # File mẫu là 10s, giữ của bạn hoặc điều chỉnh
+      timeout: 10s  # File mẫu là 5s
+      retries: 3    # File mẫu là 5
     networks:
       - app-net
     volumes:
@@ -71,14 +108,14 @@ services:
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=posting_db
+      - POSTGRES_DB=posting_db # File mẫu là midterm-domain2, giữ tên DB của bạn
     expose:
       - "5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 30s # File mẫu là 10s
+      timeout: 10s  # File mẫu là 5s
+      retries: 3    # File mẫu là 5
     networks:
       - app-net
     volumes:
@@ -90,7 +127,7 @@ services:
     command: postgres -c max_connections=200 -c shared_buffers=256MB
 
   rabbitmq:
-    image: rabbitmq:3-management-alpine
+    image: rabbitmq:3-management-alpine # File mẫu là rabbitmq:3-management, alpine nhỏ hơn
     container_name: rabbitmq
     restart: always
     expose:
@@ -101,9 +138,9 @@ services:
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 30s # File mẫu là 10s
+      timeout: 10s  # File mẫu là 5s
+      retries: 3    # File mẫu là 5
     networks:
       - app-net
     volumes:
@@ -114,7 +151,13 @@ services:
           memory: 512M
 
   auth-service:
-    image: ${DOCKER_REGISTRY}/auth-service:${IMAGE_TAG:-latest}
+    build:
+      context: ./auth-service
+      # dockerfile: Dockerfile # Mặc định nếu tên là Dockerfile
+      args: # Thêm args nếu Dockerfile của auth-service cần
+        - JWT_SECRET=${JWT_SECRET}
+        - JWT_EXPIRATION=${JWT_EXPIRATION}
+    image: auth-service:${IMAGE_TAG:-latest} # Tên image sau khi build
     container_name: auth-service
     restart: always
     expose:
@@ -125,8 +168,8 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
       - SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT=60000
       - SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=20
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRATION=${JWT_EXPIRATION}
+      - JWT_SECRET=${JWT_SECRET} # Vẫn cần ở runtime
+      - JWT_EXPIRATION=${JWT_EXPIRATION} # Vẫn cần ở runtime
       - LOGGING_LEVEL_ROOT=INFO
       - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB=INFO
       - SERVER_SERVLET_CONTEXT_PATH=/auth
@@ -152,12 +195,17 @@ services:
       start_period: 120s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.auth-service.rule=PathPrefix(`/auth`)"
+      - "traefik.http.routers.auth-service.rule=Host(`truongvinhkhuong.io.vn`) && PathPrefix(`/auth`)" # << THAY DOMAIN NẾU CẦN
       - "traefik.http.routers.auth-service.entrypoints=websecure"
-      - "traefik.http.routers.auth-service.tls=true"
       - "traefik.http.routers.auth-service.tls.certresolver=myresolver"
       - "traefik.http.services.auth-service.loadbalancer.server.port=8081"
-      - "traefik.http.services.auth-service.loadbalancer.passHostHeader=true"
+      # - "traefik.http.services.auth-service.loadbalancer.passHostHeader=true" # Cân nhắc bỏ nếu default rule của traefik đã xử lý host
+      # Thêm CORS middleware nếu cần, tương tự file mẫu
+      # - "traefik.http.middlewares.auth-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      # - "traefik.http.middlewares.auth-cors.headers.accesscontrolalloworiginlist=*" # Hoặc domain cụ thể
+      # - "traefik.http.middlewares.auth-cors.headers.accesscontrolallowheaders=Content-Type,Authorization,Origin,Accept,X-Requested-With"
+      # - "traefik.http.middlewares.auth-cors.headers.accesscontrolmaxage=3600"
+      # - "traefik.http.routers.auth-service.middlewares=auth-cors"
     networks:
       - app-net
     deploy:
@@ -166,7 +214,13 @@ services:
           memory: 1G
 
   posting-service:
-    image: ${DOCKER_REGISTRY}/posting-service:${IMAGE_TAG:-latest}
+    build:
+      context: ./posting-service
+      # dockerfile: Dockerfile
+      args: # Thêm args nếu Dockerfile của posting-service cần
+        - JWT_SECRET=${JWT_SECRET}
+        - JWT_EXPIRATION=${JWT_EXPIRATION}
+    image: posting-service:${IMAGE_TAG:-latest} # Tên image sau khi build
     container_name: posting-service
     restart: always
     expose:
@@ -176,7 +230,7 @@ services:
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
       - SERVER_SERVLET_CONTEXT_PATH=/posting
-      - SERVER_FORWARD_HEADERS_STRATEGY=framework
+      - SERVER_FORWARD_HEADERS_STRATEGY=framework # Giữ "framework" thay vì "FRAMEWORK" cho nhất quán
       - JWT_SECRET=${JWT_SECRET}
       - JWT_EXPIRATION=${JWT_EXPIRATION}
       - LOGGING_LEVEL_ROOT=INFO
@@ -202,11 +256,16 @@ services:
       start_period: 120s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.posting-service.rule=PathPrefix(`/posting`)"
+      - "traefik.http.routers.posting-service.rule=Host(`truongvinhkhuong.io.vn`) && PathPrefix(`/posting`)" # << THAY DOMAIN NẾU CẦN
       - "traefik.http.routers.posting-service.entrypoints=websecure"
-      - "traefik.http.routers.posting-service.tls=true"
       - "traefik.http.routers.posting-service.tls.certresolver=myresolver"
       - "traefik.http.services.posting-service.loadbalancer.server.port=8082"
+      # Thêm CORS middleware nếu cần
+      # - "traefik.http.middlewares.posting-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      # - "traefik.http.middlewares.posting-cors.headers.accesscontrolalloworiginlist=*"
+      # - "traefik.http.middlewares.posting-cors.headers.accesscontrolallowheaders=Content-Type,Authorization"
+      # - "traefik.http.middlewares.posting-cors.headers.accesscontrolmaxage=100"
+      # - "traefik.http.routers.posting-service.middlewares=posting-cors"
     networks:
       - app-net
     deploy:
@@ -236,43 +295,49 @@ services:
           memory: 384M
 
   style-bridge-fe:
-    image: ${DOCKER_REGISTRY}/style-bridge-fe:${IMAGE_TAG:-latest}
+    build:
+      context: ./style-bridge-fe
+      # dockerfile: Dockerfile
+      # args: # Thêm args nếu Dockerfile của FE cần, ví dụ API_URL
+      #  - API_URL=${API_URL_BUILD_TIME} # Nếu cần truyền vào lúc build
+    image: style-bridge-fe:${IMAGE_TAG:-latest} # Tên image sau khi build
     container_name: style-bridge-fe
     restart: always
     expose:
-      - "80"
+      - "80" # FE thường expose port 80 (hoặc port mà web server bên trong image FE lắng nghe)
     depends_on:
       auth-service:
         condition: service_healthy
       posting-service:
         condition: service_healthy
-    environment:
-      - API_URL=https://truongvinhkhuong.io.vn
+    environment: # Các biến này thường cho runtime của Nginx/Node server phục vụ FE
+      - API_URL=https://truongvinhkhuong.io.vn # << THAY DOMAIN NẾU CẦN
       - AUTH_API_PATH=/auth
       - POSTING_API_PATH=/posting
       - NODE_ENV=production
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=app-net"
-      - "traefik.http.routers.frontend.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.frontend.priority=1"
+      # - "traefik.docker.network=app-net" # Không cần thiết nếu service đã trong network app-net và Traefik cũng vậy
+      - "traefik.http.routers.frontend.rule=Host(`truongvinhkhuong.io.vn`)" # << THAY DOMAIN NẾU CẦN
+      - "traefik.http.routers.frontend.priority=1" # Ưu tiên cho rule gốc
       - "traefik.http.routers.frontend.entrypoints=websecure"
-      - "traefik.http.routers.frontend.tls=true"
       - "traefik.http.routers.frontend.tls.certresolver=myresolver"
-      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80" # Port mà container FE lắng nghe
+      # Thêm CORS và security headers middleware (theo mẫu)
+      - "traefik.http.middlewares.fe-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.fe-cors.headers.accesscontrolalloworiginlist=*" # Hoặc domain cụ thể
+      - "traefik.http.middlewares.fe-cors.headers.accesscontrolallowheaders=Content-Type,Authorization,Origin,Accept,X-Requested-With"
+      - "traefik.http.middlewares.fe-cors.headers.accesscontrolmaxage=3600"
+      - "traefik.http.middlewares.fe-cors.headers.addvaryheader=true" # Thêm Vary header
+      - "traefik.http.middlewares.fe-security.headers.stsseconds=31536000"
+      - "traefik.http.middlewares.fe-security.headers.stsincludesubdomains=true" # Phải chắc chắn tất cả subdomain hỗ trợ HTTPS
+      - "traefik.http.middlewares.fe-security.headers.stspreload=true" # Đăng ký domain vào HSTS preload list
+      - "traefik.http.middlewares.fe-security.headers.forcestsheader=true"
+      # - "traefik.http.middlewares.fe-security.headers.customresponseheaders.X-Forwarded-Proto=https" # Traefik thường tự xử lý
+      - "traefik.http.routers.frontend.middlewares=fe-cors,fe-security"
     networks:
       - app-net
     deploy:
       resources:
         limits:
           memory: 256M
-
-networks:
-  app-net:
-    driver: bridge
-
-volumes:
-  pgdata1:
-  pgdata2:
-  rabbitmqdata:
-  redisdata: 
