@@ -211,6 +211,12 @@ public class ApplicationRequestServiceImpl implements ApplicationRequestService 
     }
 
     @Override
+    public Page<ApplicationRequest> getApplicationsForPosterUser(Long posterId, Pageable pageable) {
+        // Use the repository method that finds applications where the user is the post author
+        return applicationRequestRepository.findApplicationsForPosterUser(posterId, pageable);
+    }
+
+    @Override
     @Transactional
     public ApplicationRequest updateApplicationStatus(Long applicationId, ApplicationStatus status, Long userId) {
         // Get the application

@@ -124,14 +124,28 @@ public class ApplicationRequestController {
 
     @GetMapping
     @Transactional(readOnly = true)
-    public ResponseEntity<Page<ApplicationRequestListDTO>> getAllApplications(
+    public ResponseEntity<?> getAllApplications(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        Page<ApplicationRequest> applications = applicationRequestService.getAllApplications(pageable);
-        // Convert to lightweight DTO page
-        Page<ApplicationRequestListDTO> applicationDTOs = applications.map(ApplicationRequestListDTO::fromEntity);
-        return ResponseEntity.ok(applicationDTOs);
+            @RequestParam(defaultValue = "10") int size,
+            Authentication authentication) {
+            
+        // If not authenticated, return unauthorized error
+        if (authentication == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("error", "Authentication required to view all applications"));
+        }
+        
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            Page<ApplicationRequest> applications = applicationRequestService.getAllApplications(pageable);
+            // Convert to full DTO page with all application details
+            Page<ApplicationRequestDTO> applicationDTOs = applications.map(ApplicationRequestDTO::fromEntity);
+            return ResponseEntity.ok(applicationDTOs);
+        } catch (Exception e) {
+            log.error("Error retrieving all applications: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "An error occurred while retrieving applications"));
+        }
     }
 
     @GetMapping("/user")
@@ -154,6 +168,36 @@ public class ApplicationRequestController {
         Pageable pageable = PageRequest.of(page, size);
         Page<ApplicationRequest> applications = applicationRequestService.getApplicationsByUser(userId, pageable);
         return ResponseEntity.ok(applications);
+    }
+
+    @GetMapping("/authored")
+    public ResponseEntity<?> getApplicationsForAuthorsRecruitmentPosts(
+            Authentication authentication,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        
+        // If not authenticated, return empty result with a message
+        if (authentication == null) {
+            return ResponseEntity.ok(
+                Map.of(
+                    "content", new ArrayList<>(),
+                    "message", "Login to view applications for your posts"
+                )
+            );
+        }
+        
+        Long userId = tokenExtractor.extractUserId(authentication);
+        Pageable pageable = PageRequest.of(page, size);
+        
+        try {
+            Page<ApplicationRequest> applications = applicationRequestService.getApplicationsForPosterUser(userId, pageable);
+            Page<ApplicationRequestDTO> applicationDTOs = applications.map(ApplicationRequestDTO::fromEntity);
+            return ResponseEntity.ok(applicationDTOs);
+        } catch (Exception e) {
+            log.error("Error retrieving applications for author {}: {}", userId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "An error occurred while retrieving applications"));
+        }
     }
 
     @GetMapping("/post/{postId}")

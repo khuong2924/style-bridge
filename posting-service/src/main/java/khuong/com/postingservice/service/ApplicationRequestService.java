@@ -43,4 +43,12 @@ public interface ApplicationRequestService {
      * @return the number of applications
      */
     Long countApplicationsByPost(Long postId);
+    
+    /**
+     * Gets applications for posts created by a specific user
+     * @param posterId the ID of the user who created the posts
+     * @param pageable pagination information
+     * @return a page of applications for posts created by the specified user
+     */
+    Page<ApplicationRequest> getApplicationsForPosterUser(Long posterId, Pageable pageable);
 }
