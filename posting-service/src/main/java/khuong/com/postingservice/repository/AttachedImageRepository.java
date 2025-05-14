@@ -20,4 +20,6 @@ public interface AttachedImageRepository extends JpaRepository<AttachedImage, Lo
     List<AttachedImage> findByApplicationRequestIdOrderByOrderInAlbumAsc(Long applicationRequestId);
     
     List<AttachedImage> findByPersonalFeedPostIdOrderByOrderInAlbumAsc(Long personalFeedPostId);
+    
+    int countByRecruitmentPostId(Long recruitmentPostId);
 } 

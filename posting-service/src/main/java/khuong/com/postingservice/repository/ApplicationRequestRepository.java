@@ -14,7 +14,8 @@ import java.util.Optional;
 @Repository
 public interface ApplicationRequestRepository extends JpaRepository<ApplicationRequest, Long> {
     
-    Page<ApplicationRequest> findByRecruitmentPostId(Long postId, Pageable pageable);
+    @Query("SELECT a FROM ApplicationRequest a LEFT JOIN FETCH a.recruitmentPost WHERE a.recruitmentPost.id = :postId")
+    Page<ApplicationRequest> findByRecruitmentPostId(@Param("postId") Long postId, Pageable pageable);
     
     Page<ApplicationRequest> findByApplicantUserId(Long userId, Pageable pageable);
     
@@ -29,4 +30,4 @@ public interface ApplicationRequestRepository extends JpaRepository<ApplicationR
     
     @Query("SELECT a FROM ApplicationRequest a WHERE a.recruitmentPost.posterUserId = :userId")
     Page<ApplicationRequest> findApplicationsForPosterUser(@Param("userId") Long userId, Pageable pageable);
-} 
+}

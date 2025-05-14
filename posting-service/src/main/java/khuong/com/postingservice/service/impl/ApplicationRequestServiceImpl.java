@@ -181,6 +181,17 @@ public class ApplicationRequestServiceImpl implements ApplicationRequestService 
     }
 
     @Override
+    public Page<ApplicationRequest> getApplicationsByPost(Long postId, Pageable pageable) {
+        // No authentication check - available to anyone
+        return applicationRequestRepository.findByRecruitmentPostId(postId, pageable);
+    }
+
+    @Override
+    public Long countApplicationsByPost(Long postId) {
+        return applicationRequestRepository.countApplicationsByPostId(postId);
+    }
+
+    @Override
     @Transactional
     public ApplicationRequest updateApplicationStatus(Long applicationId, ApplicationStatus status, Long userId) {
         // Get the application
@@ -198,4 +209,4 @@ public class ApplicationRequestServiceImpl implements ApplicationRequestService 
         
         return applicationRequestRepository.save(application);
     }
-} 
+}

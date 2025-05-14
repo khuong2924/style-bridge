@@ -63,21 +63,21 @@ public class WebSecurityConfig {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
-            .authorizeHttpRequests(auth -> 
-                auth
-                    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    .requestMatchers("/error").permitAll()
-                    // Cho phép tạm thời truy cập endpoint này không cần xác thực
-                    .requestMatchers("/api/posts/with-images").permitAll()
-                    .requestMatchers("/api/posts/**").authenticated()
-                    .anyRequest().permitAll()
+            .authorizeHttpRequests(auth -> auth
+                // Order from most specific to most general
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/error").permitAll()
+                .requestMatchers("/api/posts/with-images").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/posts/**").permitAll() // Allow all GET requests to /api/posts
+                .requestMatchers("/api/posts/**").authenticated()  // Other methods require authentication
+                .requestMatchers(HttpMethod.GET, "/**").permitAll() // Other GET requests are still permitted
+                .anyRequest().authenticated()
             )
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-        log.info("Security filter chain configured successfully");
         return http.build();
     }
 }

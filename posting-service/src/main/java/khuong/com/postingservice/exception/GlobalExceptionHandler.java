@@ -1,6 +1,7 @@
 package khuong.com.postingservice.exception;
 
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.LazyInitializationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -11,8 +12,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.http.converter.HttpMessageNotWritableException;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.Map;
@@ -113,14 +116,49 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
-        log.error("Unexpected error: {}", ex.getMessage(), ex);
-        ErrorResponse errorResponse = new ErrorResponse(
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                "Server error",
-                "An unexpected error occurred"
-        );
-        return new ResponseEntity<>(errorResponse, HttpStatus.INTERNAL_SERVER_ERROR);
+    public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
+        // Log the full stack trace for debugging
+        log.error("Unexpected error occurred: {}", ex.getMessage(), ex);
+        
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        body.put("error", "Server error");
+        body.put("message", "An unexpected error occurred");
+        body.put("timestamp", LocalDateTime.now());
+        
+        // Add more details in development environment
+        if (log.isDebugEnabled()) {
+            body.put("exception", ex.getClass().getName());
+            body.put("detail", ex.getMessage());
+        }
+        
+        return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(LazyInitializationException.class)
+    public ResponseEntity<Map<String, Object>> handleLazyInitializationException(LazyInitializationException ex) {
+        log.error("Lazy initialization exception", ex);
+        
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        body.put("error", "Data access error");
+        body.put("message", "Could not initialize lazy data");
+        body.put("timestamp", LocalDateTime.now());
+        
+        return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(HttpMessageNotWritableException.class)
+    public ResponseEntity<Map<String, Object>> handleHttpMessageNotWritableException(HttpMessageNotWritableException ex) {
+        log.error("HTTP message not writable exception", ex);
+        
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+        body.put("error", "Data serialization error");
+        body.put("message", "Không thể chuyển đổi dữ liệu thành JSON");
+        body.put("timestamp", LocalDateTime.now());
+        
+        return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
     // Error response class
@@ -147,4 +185,4 @@ public class GlobalExceptionHandler {
             return message;
         }
     }
-} 
+}

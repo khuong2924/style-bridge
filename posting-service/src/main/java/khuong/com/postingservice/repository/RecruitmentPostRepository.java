@@ -36,4 +36,8 @@ public interface RecruitmentPostRepository extends JpaRepository<RecruitmentPost
     
     @Query("SELECT r FROM RecruitmentPost r LEFT JOIN FETCH r.attachedImages WHERE r.id = :id")
     Optional<RecruitmentPost> findByIdWithAttachedImages(@Param("id") Long id);
+    
+    @Query(value = "SELECT DISTINCT r FROM RecruitmentPost r",
+           countQuery = "SELECT COUNT(r) FROM RecruitmentPost r")
+    Page<RecruitmentPost> findAllPosts(Pageable pageable);
 } 

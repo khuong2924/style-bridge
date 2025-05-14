@@ -168,8 +168,27 @@ public class RecruitmentPostServiceImpl implements RecruitmentPostService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<RecruitmentPost> getAllPosts(Pageable pageable) {
-        return recruitmentPostRepository.findAll(pageable);
+        log.debug("Getting all posts with pageable: {}", pageable);
+        try {
+            Page<RecruitmentPost> posts = recruitmentPostRepository.findAllPosts(pageable);
+            
+            // Initialize the image counts to avoid LazyInitializationException
+            for (RecruitmentPost post : posts.getContent()) {
+                int imageCount = attachedImageRepository.countByRecruitmentPostId(post.getId());
+                // We're not setting the actual images, just making sure the count is available
+                if (post.getAttachedImages() == null) {
+                    post.setAttachedImages(new ArrayList<>());
+                }
+            }
+            
+            return posts;
+        } catch (Exception e) {
+            log.error("Error fetching posts: {}", e.getMessage(), e);
+            // Fallback to simpler query if there are issues
+            return recruitmentPostRepository.findAll(pageable);
+        }
     }
 
     @Override

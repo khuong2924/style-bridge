@@ -2,7 +2,7 @@ package khuong.com.postingservice.controller;
 
 import khuong.com.postingservice.configs.cloudinary.ImageUploadService;
 import khuong.com.postingservice.dto.ImageInfo;
-import khuong.com.postingservice.entity.AttachedImage;
+import khuong.com.postingservice.dto.RecruitmentPostDTO;
 import khuong.com.postingservice.entity.RecruitmentPost;
 import khuong.com.postingservice.enums.RecruitmentPostStatus;
 import khuong.com.postingservice.service.RecruitmentPostService;
@@ -272,15 +272,40 @@ public class RecruitmentPostController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<RecruitmentPost>> getAllPosts(
+    public ResponseEntity<?> getAllPosts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "id") String sortBy,
             @RequestParam(defaultValue = "DESC") String direction) {
-        Sort.Direction sortDirection = Sort.Direction.fromString(direction);
-        Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
-        Page<RecruitmentPost> posts = recruitmentPostService.getAllPosts(pageable);
-        return ResponseEntity.ok(posts);
+        try {
+            log.info("Getting all posts with page={}, size={}, sortBy={}, direction={}", page, size, sortBy, direction);
+            Sort.Direction sortDirection = Sort.Direction.fromString(direction);
+            Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
+            Page<RecruitmentPost> posts = recruitmentPostService.getAllPosts(pageable);
+            
+            // Chuyển đổi Page<RecruitmentPost> thành Page<RecruitmentPostDTO> một cách an toàn
+            Page<RecruitmentPostDTO> postDTOs = posts.map(post -> {
+                try {
+                    return RecruitmentPostDTO.fromEntity(post);
+                } catch (Exception e) {
+                    log.error("Error converting post to DTO: {}", e.getMessage());
+                    // Trả về DTO với thông tin cơ bản nếu có lỗi
+                    RecruitmentPostDTO dto = new RecruitmentPostDTO();
+                    dto.setId(post.getId());
+                    dto.setTitle(post.getTitle());
+                    dto.setStatus(post.getStatus());
+                    return dto;
+                }
+            });
+            return ResponseEntity.ok(postDTOs);
+        } catch (Exception e) {
+            log.error("Error getting all posts: {}", e.getMessage(), e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", "Error retrieving posts");
+            errorResponse.put("message", "Could not retrieve posts at this time");
+            errorResponse.put("status", HttpStatus.INTERNAL_SERVER_ERROR.value());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
     }
 
     @GetMapping("/status/{status}")

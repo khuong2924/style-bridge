@@ -25,6 +25,8 @@ public interface ApplicationRequestService {
     
     Page<ApplicationRequest> getApplicationsByUser(Long userId, Pageable pageable);
     
+    Page<ApplicationRequest> getApplicationsByPost(Long postId, Pageable pageable);
+    
     Page<ApplicationRequest> getApplicationsByPost(Long postId, Long userId, Pageable pageable);
     
     ApplicationRequest updateApplicationStatus(Long applicationId, ApplicationStatus status, Long userId);
@@ -34,4 +36,11 @@ public interface ApplicationRequestService {
     void deleteImageFromApplication(Long applicationId, Long imageId, Long userId);
     
     List<ImageInfo> getApplicationImages(Long applicationId);
-} 
+    
+    /**
+     * Counts applications for a specific post
+     * @param postId the ID of the post
+     * @return the number of applications
+     */
+    Long countApplicationsByPost(Long postId);
+}
