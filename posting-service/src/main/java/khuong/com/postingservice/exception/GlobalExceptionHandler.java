@@ -2,6 +2,7 @@ package khuong.com.postingservice.exception;
 
 import lombok.extern.slf4j.Slf4j;
 import org.hibernate.LazyInitializationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -113,6 +114,36 @@ public class GlobalExceptionHandler {
         body.put("error", "File Processing Error");
         body.put("message", "There was an error processing the uploaded file(s).");
         return new ResponseEntity<>(body, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolationException(DataIntegrityViolationException ex) {
+        log.error("Data integrity violation: {}", ex.getMessage(), ex);
+        
+        String errorMessage = ex.getMessage();
+        String userFriendlyMessage = "Data constraint violation occurred";
+        
+        // Extract more specific message for common constraints
+        if (errorMessage.contains("ngay_gio_hen")) {
+            userFriendlyMessage = "Booking date (ngay_gio_hen) cannot be null";
+        } else if (errorMessage.contains("ma_bai_dang_tuyen")) {
+            userFriendlyMessage = "Recruitment post ID (ma_bai_dang_tuyen) cannot be null";
+        } else if (errorMessage.contains("ma_nguoi_dung_khach_hang")) {
+            userFriendlyMessage = "Client user ID (ma_nguoi_dung_khach_hang) cannot be null";
+        }
+        
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", HttpStatus.BAD_REQUEST.value());
+        body.put("error", "Data validation error");
+        body.put("message", userFriendlyMessage);
+        body.put("timestamp", LocalDateTime.now());
+        
+        if (log.isDebugEnabled()) {
+            body.put("exception", ex.getClass().getName());
+            body.put("detail", errorMessage);
+        }
+        
+        return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(Exception.class)

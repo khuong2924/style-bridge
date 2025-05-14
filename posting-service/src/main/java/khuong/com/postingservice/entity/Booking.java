@@ -1,7 +1,10 @@
 package khuong.com.postingservice.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import khuong.com.postingservice.enums.BookingStatus;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Future;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,8 +30,11 @@ public class Booking {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ma_bai_dang_tuyen", nullable = false)
+    @JsonBackReference
     private RecruitmentPost recruitmentPost;
 
+    @NotNull(message = "Booking date cannot be null")
+    @Future(message = "Booking date must be in the future")
     @Column(name = "ngay_gio_hen", nullable = false)
     private LocalDateTime bookingDate;
 

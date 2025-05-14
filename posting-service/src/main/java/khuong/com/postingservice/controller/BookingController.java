@@ -1,5 +1,6 @@
 package khuong.com.postingservice.controller;
 
+import khuong.com.postingservice.dto.BookingDTO;
 import khuong.com.postingservice.entity.Booking;
 import khuong.com.postingservice.service.BookingService;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/bookings")
@@ -24,22 +26,29 @@ public class BookingController {
     private final BookingService bookingService;
 
     @PostMapping
-    public ResponseEntity<Booking> createBooking(
+    public ResponseEntity<?> createBooking(
             @Valid @RequestBody Booking booking,
             Authentication authentication) {
+        // Check if bookingDate is null
+        if (booking.getBookingDate() == null) {
+            return new ResponseEntity<>("Booking date (ngay_gio_hen) cannot be null", HttpStatus.BAD_REQUEST);
+        }
+        
         Long userId = Long.valueOf(authentication.getPrincipal().toString());
         Booking createdBooking = bookingService.createBooking(booking, userId);
-        return new ResponseEntity<>(createdBooking, HttpStatus.CREATED);
+        BookingDTO bookingDTO = BookingDTO.fromEntity(createdBooking);
+        return new ResponseEntity<>(bookingDTO, HttpStatus.CREATED);
     }
 
     @PutMapping("/{bookingId}")
-    public ResponseEntity<Booking> updateBooking(
+    public ResponseEntity<BookingDTO> updateBooking(
             @PathVariable Long bookingId,
             @Valid @RequestBody Booking booking,
             Authentication authentication) {
         Long userId = Long.valueOf(authentication.getPrincipal().toString());
         Booking updatedBooking = bookingService.updateBooking(bookingId, booking, userId);
-        return ResponseEntity.ok(updatedBooking);
+        BookingDTO bookingDTO = BookingDTO.fromEntity(updatedBooking);
+        return ResponseEntity.ok(bookingDTO);
     }
 
     @DeleteMapping("/{bookingId}")
@@ -52,49 +61,62 @@ public class BookingController {
     }
 
     @GetMapping("/{bookingId}")
-    public ResponseEntity<Booking> getBookingById(@PathVariable Long bookingId) {
+    public ResponseEntity<BookingDTO> getBookingById(@PathVariable Long bookingId) {
         return bookingService.getBookingById(bookingId)
-                .map(ResponseEntity::ok)
+                .map(booking -> ResponseEntity.ok(BookingDTO.fromEntity(booking)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/post/{postId}")
-    public ResponseEntity<List<Booking>> getBookingsByPostId(@PathVariable Long postId) {
+    public ResponseEntity<List<BookingDTO>> getBookingsByPostId(@PathVariable Long postId) {
         List<Booking> bookings = bookingService.getBookingsByPostId(postId);
-        return ResponseEntity.ok(bookings);
+        List<BookingDTO> bookingDTOs = bookings.stream()
+                .map(BookingDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(bookingDTOs);
     }
 
     @GetMapping("/user")
-    public ResponseEntity<List<Booking>> getBookingsByClientUserId(Authentication authentication) {
+    public ResponseEntity<List<BookingDTO>> getBookingsByClientUserId(Authentication authentication) {
         Long userId = Long.valueOf(authentication.getPrincipal().toString());
         List<Booking> bookings = bookingService.getBookingsByClientUserId(userId);
-        return ResponseEntity.ok(bookings);
+        List<BookingDTO> bookingDTOs = bookings.stream()
+                .map(BookingDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(bookingDTOs);
     }
 
     @GetMapping("/poster")
-    public ResponseEntity<List<Booking>> getBookingsForPosterUser(Authentication authentication) {
+    public ResponseEntity<List<BookingDTO>> getBookingsForPosterUser(Authentication authentication) {
         Long userId = Long.valueOf(authentication.getPrincipal().toString());
         List<Booking> bookings = bookingService.getBookingsForPosterUser(userId);
-        return ResponseEntity.ok(bookings);
+        List<BookingDTO> bookingDTOs = bookings.stream()
+                .map(BookingDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(bookingDTOs);
     }
 
     @GetMapping("/date-range")
-    public ResponseEntity<List<Booking>> getBookingsBetweenDates(
+    public ResponseEntity<List<BookingDTO>> getBookingsBetweenDates(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
         List<Booking> bookings = bookingService.getBookingsBetweenDates(startDate, endDate);
-        return ResponseEntity.ok(bookings);
+        List<BookingDTO> bookingDTOs = bookings.stream()
+                .map(BookingDTO::fromEntity)
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(bookingDTOs);
     }
 
     @GetMapping("/poster/paged")
-    public ResponseEntity<Page<Booking>> getBookingsByPosterUserId(
+    public ResponseEntity<Page<BookingDTO>> getBookingsByPosterUserId(
             Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         Long userId = Long.valueOf(authentication.getPrincipal().toString());
         Pageable pageable = PageRequest.of(page, size);
         Page<Booking> bookings = bookingService.getBookingsByPosterUserId(userId, pageable);
-        return ResponseEntity.ok(bookings);
+        Page<BookingDTO> bookingDTOs = bookings.map(BookingDTO::fromEntity);
+        return ResponseEntity.ok(bookingDTOs);
     }
 
     @PatchMapping("/{bookingId}/confirm")

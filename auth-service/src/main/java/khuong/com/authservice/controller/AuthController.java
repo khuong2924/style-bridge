@@ -75,15 +75,15 @@ public class AuthController {
 
     @PostMapping(value = "/signup", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> registerUser(
-            @Valid @RequestPart("username") String username,
-            @Valid @RequestPart("email") String email,
-            @Valid @RequestPart("password") String password,
-            @RequestPart(value = "fullName", required = false) String fullName,
-            @RequestPart(value = "phone", required = false) String phone,
-            @RequestPart(value = "address", required = false) String address,
-            @RequestPart(value = "gender", required = false) String gender,
-            @RequestPart(value = "roles", required = false) Set<String> roles,
-            @RequestPart(value = "avatar", required = false) MultipartFile avatar) {
+            @Valid @RequestParam("username") String username,
+            @Valid @RequestParam("email") String email,
+            @Valid @RequestParam("password") String password,
+            @RequestParam(value = "fullName", required = false) String fullName,
+            @RequestParam(value = "phone", required = false) String phone,
+            @RequestParam(value = "address", required = false) String address,
+            @RequestParam(value = "gender", required = false) String gender,
+            @RequestParam(value = "roles", required = false) Set<String> roles,
+            @RequestParam(value = "avatar", required = false) MultipartFile avatar) {
         
         // Check if username exists
         if (userRepository.existsByUsername(username)) {

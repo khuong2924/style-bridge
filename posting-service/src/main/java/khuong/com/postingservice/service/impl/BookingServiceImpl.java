@@ -29,6 +29,10 @@ public class BookingServiceImpl implements BookingService {
     @Override
     @Transactional
     public Booking createBooking(Booking booking, Long userId) {
+        if (booking.getBookingDate() == null) {
+            throw new IllegalArgumentException("Booking date (ngay_gio_hen) cannot be null");
+        }
+
         RecruitmentPost post = recruitmentPostRepository.findById(booking.getRecruitmentPost().getId())
                 .orElseThrow(() -> new IllegalArgumentException("Recruitment post not found"));
         
@@ -53,6 +57,11 @@ public class BookingServiceImpl implements BookingService {
         // Can only update if status is PENDING
         if (existingBooking.getStatus() != BookingStatus.PENDING) {
             throw new IllegalStateException("Cannot update a booking that is not in PENDING status");
+        }
+        
+        // If bookingDate is being updated, ensure it's not null
+        if (updatedBooking.getBookingDate() != null) {
+            existingBooking.setBookingDate(updatedBooking.getBookingDate());
         }
         
         existingBooking.setLocation(updatedBooking.getLocation());
