@@ -1,0 +1,3 @@
+[submodule "style-bridge-fe"]
+	path = style-bridge-fe
+	url = https://github.com/khuong2924/style-bridge-fe
