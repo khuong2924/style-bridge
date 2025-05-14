@@ -68,8 +68,12 @@ public class WebSecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth ->
-                        auth.requestMatchers("/**").permitAll()  // Tạm thời cho phép tất cả để test
-                                .anyRequest().authenticated()
+                        auth.requestMatchers("/auth/**").permitAll()
+                            .requestMatchers("/users/{userId}").permitAll()
+                            .requestMatchers("/actuator/**").permitAll()
+                            .requestMatchers("/api-docs/**").permitAll()
+                            .requestMatchers("/swagger-ui/**").permitAll()
+                            .anyRequest().authenticated()
                 );
 
         http.authenticationProvider(authenticationProvider());

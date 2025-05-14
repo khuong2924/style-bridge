@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import khuong.com.authservice.dto.UpdateUserDTO;
 import khuong.com.authservice.dto.UserDTO;
+import khuong.com.authservice.exception.ResourceNotFoundException;
 import khuong.com.authservice.payload.response.MessageResponse;
 import khuong.com.authservice.repository.UserRepository;
 import khuong.com.authservice.security.UserDetailsImpl;
@@ -63,10 +64,32 @@ public class UserController {
     }
 
     @GetMapping("/me")
-    public UserDTO getCurrentUser() {
-        return userService.getCurrentUser();
+    public ResponseEntity<?> getCurrentUser() {
+        try {
+            UserDTO userResponse = userService.getCurrentUser();
+            return ResponseEntity.ok(userResponse);
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(401)
+                .body(new MessageResponse("Error: " + e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(500)
+                .body(new MessageResponse("Error: " + e.getMessage()));
+        }
     }
 
+    @GetMapping("/{userId}")
+    public ResponseEntity<?> getUserById(@PathVariable Long userId) {
+        try {
+            UserDTO userResponse = userService.getUserProfile(userId);
+            return ResponseEntity.ok(userResponse);
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(404)
+                .body(new MessageResponse("Error: User not found"));
+        } catch (Exception e) {
+            return ResponseEntity.status(500)
+                .body(new MessageResponse("Error: " + e.getMessage()));
+        }
+    }
 
     @GetMapping("/logout")
     public ResponseEntity<?> logout(HttpServletRequest request, HttpServletResponse response) {
