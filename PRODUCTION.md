@@ -49,10 +49,26 @@ Chỉnh sửa các thông tin sau trong các file cấu hình:
 
 ## Build và đẩy Docker Images
 
-```bash
-# Build images
-docker-compose -f docker-compose.yml build
+### Build các services riêng biệt
 
+Để tránh lỗi build, bạn nên build từng service riêng biệt:
+
+```bash
+# Build auth-service
+docker build -t auth-service:latest ./auth-service --build-arg JWT_SECRET=${JWT_SECRET} --build-arg JWT_EXPIRATION=${JWT_EXPIRATION}
+
+# Build posting-service
+docker build -t posting-service:latest ./posting-service --build-arg JWT_SECRET=${JWT_SECRET} --build-arg JWT_EXPIRATION=${JWT_EXPIRATION} --build-arg REDIS_HOST=redis
+
+# Build frontend (đảm bảo Dockerfile tồn tại)
+cd style-bridge-fe
+docker build -t style-bridge-fe:latest .
+cd ..
+```
+
+### Tag và push images
+
+```bash
 # Tag images
 docker tag auth-service:latest ${DOCKER_REGISTRY}/auth-service:${IMAGE_TAG}
 docker tag posting-service:latest ${DOCKER_REGISTRY}/posting-service:${IMAGE_TAG}
@@ -63,6 +79,70 @@ docker push ${DOCKER_REGISTRY}/auth-service:${IMAGE_TAG}
 docker push ${DOCKER_REGISTRY}/posting-service:${IMAGE_TAG}
 docker push ${DOCKER_REGISTRY}/style-bridge-fe:${IMAGE_TAG}
 ```
+
+### Khắc phục lỗi build frontend
+
+Nếu bạn gặp lỗi khi build frontend:
+
+```
+unable to prepare context: unable to evaluate symlinks in Dockerfile path: lstat /path/to/style-bridge-fe/Dockerfile: no such file or directory
+```
+
+Hãy thực hiện các bước sau:
+
+1. Kiểm tra xem Dockerfile có tồn tại trong thư mục style-bridge-fe không:
+   ```bash
+   ls -la ./style-bridge-fe/
+   ```
+
+2. Nếu không có Dockerfile, tạo một Dockerfile mới:
+   ```bash
+   cat > ./style-bridge-fe/Dockerfile << 'EOF'
+   # Build stage
+   FROM node:18-alpine as build
+   WORKDIR /app
+   COPY package*.json ./
+   RUN npm ci
+   COPY . .
+   RUN npm run build
+
+   # Production stage
+   FROM nginx:alpine
+   COPY --from=build /app/build /usr/share/nginx/html
+   COPY nginx.conf /etc/nginx/conf.d/default.conf
+   EXPOSE 80
+   CMD ["nginx", "-g", "daemon off;"]
+   EOF
+   ```
+
+3. Tạo file nginx.conf nếu chưa có:
+   ```bash
+   cat > ./style-bridge-fe/nginx.conf << 'EOF'
+   server {
+     listen 80;
+     server_name localhost;
+     
+     location / {
+       root /usr/share/nginx/html;
+       index index.html;
+       try_files $uri $uri/ /index.html;
+     }
+     
+     # Cấu hình proxy cho API
+     location /auth/ {
+       proxy_pass http://auth-service:8081;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+     }
+     
+     location /posting/ {
+       proxy_pass http://posting-service:8082;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+     }
+   }
+   EOF
+   ```
 
 ## Triển khai
 
